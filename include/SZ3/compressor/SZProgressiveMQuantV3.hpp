@@ -427,9 +427,13 @@ namespace SZ3 {
                 double psnr, nrmse, max_err, range;
                 verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             }
-            for(int l = 0; l < lsize; l++){
+            // for(int l = 0; l < lsize; l++){
+            //     bdelta[l] = std::min(bsize, 17);
+            // }    
+            for(int l = lsize - 1; l >= 0; l--)
+            {
                 bdelta[l] = bsize;
-            }    
+            }
             decompress_progressive(dec_data, data, 
                                 bsum, bdelta,
                                 bsize, lsize,
@@ -665,7 +669,11 @@ namespace SZ3 {
             retrieved_size += length;
 
             uchar * const compressed_data = new uchar[num_elements * sizeof(int) * 100];
-            length = lossless.decompress(data_pos, length, compressed_data, num_elements * sizeof(int) * 100);
+            if (quant_size < 128 && bitgroup[bg] == 1) {
+                memcpy(compressed_data, data_pos, data_length);
+            } else {
+                length = lossless.decompress(data_pos, length, compressed_data, num_elements * sizeof(int) * 100);
+            }
             uchar const *compressed_data_pos = compressed_data;
 
             // size_t quant_size;
@@ -756,12 +764,21 @@ namespace SZ3 {
                     encoder.postprocess_encode();
                 }
 
-                size_t size = lossless.compress(
-                        buffer, buffer_pos - buffer, lossless_data_pos);
-//                printf("%d %lu, ", bitgroup[b], size);
-                total_size += size;
-                lossless_data_pos += size;
-                lossless_size.push_back(size);
+                if(qsize < 128 && bitgroup[b] == 1) {
+                    memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
+                    size_t size = buffer_pos - buffer;
+    //                printf("%d %lu, ", bitgroup[b], size);
+                    total_size += size;
+                    lossless_data_pos += size;
+                    lossless_size.push_back(size);
+                } else {
+                    size_t size = lossless.compress(
+                            buffer, buffer_pos - buffer, lossless_data_pos);
+    //                printf("%d %lu, ", bitgroup[b], size);
+                    total_size += size;
+                    lossless_data_pos += size;
+                    lossless_size.push_back(size);
+                }
             }
 //            printf("\n");
             delete[]buffer;

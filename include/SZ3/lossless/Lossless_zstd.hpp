@@ -25,7 +25,7 @@ namespace SZ3 {
             size_t dstSize = ZSTD_compressBound(srcSize);
 
             // write(srcSize, dstPos);
-
+  
             size_t const countSize = ZSTD_compress(dst, dstSize, src, srcSize, compression_level);
             if (ZSTD_isError(countSize)) {
                 assert(!ZSTD_isError(countSize));
