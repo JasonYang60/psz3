@@ -472,19 +472,19 @@ namespace SZ3 {
             for (uint level = level_progressive; level > 0; level--) {
                 for (int direct = 0; direct < N; direct++) {
                     int lid = (level_progressive - level) * N + direct;
-                    if (bdelta[lid] > 0) {
+                    // if (bdelta[lid] > 0) {
 //                                printf("\n-----------------------\n");
 //                                printf("Level = %d , direction = %d , lid = %d, bg = %d\n", level, direct, lid, bsum[lid]);
-                        changed = true;
-                        result["level"] = level;
-                        result["direct"] = direct;
+                        // changed = true;
+                    result["level"] = level;
+                    result["direct"] = direct;
                         
-                        int bg_end = std::min(bsize, bsum[lid] + bdelta[lid]);
-                        {   // load bit group data into quant_ids[ ]
-                            quant_inds.clear();
-                            quant_cnt = 0;
-                            quant_inds.resize(levelSize[level_cnt], 0);
-
+                    int bg_end = std::min(bsize, bsum[lid] + bdelta[lid]);
+                    {   // load bit group data into quant_ids[ ]
+                        quant_inds.clear();
+                        quant_cnt = 0;
+                        quant_inds.resize(levelSize[level_cnt], 0);
+                        if (bdelta[lid] > 0){
                             for (int b = bsum[lid]; b < bg_end; b++) {
                                 // l2_proj = l2_diff[lid * bsize + b];
 //                                    printf("projected l2 delta = %.10G\n", l2_diff[lid * bsize + b]);
@@ -493,19 +493,20 @@ namespace SZ3 {
                                 lossless_decode_bitgroup(b, bg_data, bg_len, levelSize[level_cnt]);
                                 printf("--------[Log] bitGroup_len = %d\n", bg_len);
                             }
-                            level_cnt++; 
                         }
-                        block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
-                                            &SZProgressiveMQuant::recover_set_delta,
-                                            interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
-                        bsum[lid] = bg_end;
-                    } else {
-                        if (changed) {
-                            block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
-                                                &SZProgressiveMQuant::recover_set_delta_no_quant,
-                                                interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
-                        }
+                        level_cnt++; 
                     }
+                    block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
+                                        &SZProgressiveMQuant::recover_set_delta,
+                                        interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
+                    bsum[lid] = bg_end;
+                // } else {
+                //     if (changed) {
+                //         block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
+                //                             &SZProgressiveMQuant::recover_set_delta_no_quant,
+                //                             interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
+                //     }
+                // }
                 }
             }  
             {   // verification
@@ -645,11 +646,11 @@ namespace SZ3 {
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
-       std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
+    //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
     //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-    //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+       std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
 
