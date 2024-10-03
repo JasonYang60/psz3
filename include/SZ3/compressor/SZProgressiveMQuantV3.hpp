@@ -308,6 +308,7 @@ namespace SZ3 {
 //         }
         T *decompress_v3(uchar const *lossless_data, const std::vector<size_t> &lossless_size, T *data) {
             Timer timer(true);
+            quant_inds.reserve(num_elements);
 
             //load dim && l2_diff
             size_t buffer_len = lossless_size[0];
@@ -482,15 +483,17 @@ namespace SZ3 {
                         {   // load bit group data into quant_ids[ ]
                             quant_inds.clear();
                             quant_cnt = 0;
+                            quant_inds.resize(levelSize[level_cnt], 0);
+
                             for (int b = bsum[lid]; b < bg_end; b++) {
                                 // l2_proj = l2_diff[lid * bsize + b];
 //                                    printf("projected l2 delta = %.10G\n", l2_diff[lid * bsize + b]);
                                 uchar const *bg_data = data_lb[lid * bsize + b];
                                 size_t bg_len = size_lb[lid * bsize + b];
-                                lossless_decode_bitgroup(b, bg_data, bg_len, levelSize[level_cnt++]);
+                                lossless_decode_bitgroup(b, bg_data, bg_len, levelSize[level_cnt]);
                                 printf("--------[Log] bitGroup_len = %d\n", bg_len);
                             }
-                                
+                            level_cnt++; 
                         }
                         block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
                                             &SZProgressiveMQuant::recover_set_delta,
@@ -660,8 +663,8 @@ namespace SZ3 {
             size_t length = data_length;
             retrieved_size += length;
 
-            uchar *compressed_data = new uchar[num_elements * sizeof(int)];
-            length = lossless.decompress(data_pos, length, compressed_data, num_elements * sizeof(int));
+            uchar * const compressed_data = new uchar[num_elements * sizeof(int) * 100];
+            length = lossless.decompress(data_pos, length, compressed_data, num_elements * sizeof(int) * 100);
             uchar const *compressed_data_pos = compressed_data;
 
             // size_t quant_size;
@@ -679,7 +682,7 @@ namespace SZ3 {
             }
 
             // lossless.postdecompress_data(compressed_data);
-            delete []compressed_data;
+            delete[] compressed_data;
 
 
 //                printf("\n************Bitplane = %d *****************\n", bg);
@@ -688,7 +691,6 @@ namespace SZ3 {
                 bitshift -= bitgroup[bb];
             }
             std::cout << "------[Log] quant size = " << quant_size << std::endl;
-            quant_inds.resize(quant_size, 0);
             for (size_t i = 0; i < quant_size; i++) {
                 quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
                 // if(quant_size == 4 && bg == 0)

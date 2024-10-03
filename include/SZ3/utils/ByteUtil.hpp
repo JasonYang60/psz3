@@ -360,7 +360,8 @@ std::vector<int> decode_int_1bit(const uchar *&c, size_t &remaining_length, size
     // size_t byteLen, intLen;
     // read(intLen, c, remaining_length);
     // read(byteLen, c, remaining_length);
-    size_t byteLen = intLen * 2 / 8 + (intLen % 4 == 0 ? 0 : 1);
+    size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
+
     std::vector<int> ints(intLen);
     size_t i = 0, b = 0;
 
