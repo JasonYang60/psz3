@@ -334,8 +334,8 @@ namespace SZ3 {
                     buffer_len = lossless_size[lossless_size.size() - 1];
                     retrieved_size += buffer_len;
                 }
-                uchar * dcmpData = new uchar[num_elements * sizeof(T)];
-                size_t dcmpSize = lossless.decompress(buffer, buffer_len, dcmpData, num_elements * sizeof(T));
+                uchar * dcmpData = new uchar[num_elements * sizeof(T) * 4];
+                size_t dcmpSize = lossless.decompress(buffer, buffer_len, dcmpData, num_elements * sizeof(T) * 4);
     //            uchar const *buffer_pos = buffer;
                 uchar const * dcmpDataRef = dcmpData;
                 quantizer.load(dcmpDataRef, dcmpSize);
@@ -645,11 +645,11 @@ namespace SZ3 {
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
-//        std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
+       std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
-    //    std::vector<int> bitgroup = {16, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1};
-       std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
 
@@ -690,7 +690,7 @@ namespace SZ3 {
             for (int bb = 0; bb <= bg; bb++) {
                 bitshift -= bitgroup[bb];
             }
-            std::cout << "------[Log] quant size = " << quant_size << std::endl;
+            // std::cout << "------[Log] quant size = " << quant_size << std::endl;
             for (size_t i = 0; i < quant_size; i++) {
                 quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
                 // if(quant_size == 4 && bg == 0)
@@ -698,7 +698,7 @@ namespace SZ3 {
                 //     std::cout << "------[Log] quant_inds[i] = " << quant_inds[i] << std::endl;
                 // }
             }
-            std::cout << "------[Log] quant_size = " << quant_size << std::endl;
+            // std::cout << "------[Log] quant_size = " << quant_size << std::endl;
             std::cout << "------[Log] bg = " << bg << std::endl;
         }
 

@@ -36,9 +36,10 @@ void interp_compress_decompress(const char *path, double eb, int interp_op, int 
         SZ3::Timer timer(true);
         auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
         auto sz = SZ3::SZProgressiveMQuant<float, N, SZ3::LinearQuantizer2<float>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
-                SZ3::LinearQuantizer2<float>(num, eb, 524288),
+                // SZ3::LinearQuantizer2<float>(num, eb, 524288),
+                SZ3::LinearQuantizer2<float>(num, eb, 65536),
                 SZ3::HuffmanEncoder<int>(),
-                SZ3::Lossless_zstd(2),
+                SZ3::Lossless_zstd(3),
                 dims, interp_op, direction_op, 50000, level_independent, block_size, level_fill
         );
         compressed = sz.compress(data.get(), compressed_size);
@@ -61,7 +62,8 @@ void interp_compress_decompress(const char *path, double eb, int interp_op, int 
         SZ3::Timer timer(true);
         auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
         auto sz = SZ3::SZProgressiveMQuant<float, N, SZ3::LinearQuantizer2<float>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
-                SZ3::LinearQuantizer2<float>(num, eb, 524288),
+                // SZ3::LinearQuantizer2<float>(num, eb, 524288),
+                SZ3::LinearQuantizer2<float>(num, eb, 65536),
                 SZ3::HuffmanEncoder<int>(),
                 SZ3::Lossless_zstd(),
                 dims, interp_op, direction_op, 50000, level_independent, block_size, level_fill
