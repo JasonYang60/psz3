@@ -323,8 +323,8 @@ inline void encode_int_1bit(const std::vector<int> &data, uchar *&c) {
     size_t intLen = data.size();
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
 
-    write(intLen, c);
-    write(byteLen, c);
+    // write(intLen, c);
+    // write(byteLen, c);
 
     size_t b, i = 0;
     int mod8 = intLen % 8;
@@ -356,10 +356,11 @@ inline void encode_int_1bit(const std::vector<int> &data, uchar *&c) {
     c += byteLen;
 }
 
-std::vector<int> decode_int_1bit(const uchar *&c, size_t &remaining_length) {
-    size_t byteLen, intLen;
-    read(intLen, c, remaining_length);
-    read(byteLen, c, remaining_length);
+std::vector<int> decode_int_1bit(const uchar *&c, size_t &remaining_length, size_t intLen) {
+    // size_t byteLen, intLen;
+    // read(intLen, c, remaining_length);
+    // read(byteLen, c, remaining_length);
+    size_t byteLen = intLen * 2 / 8 + (intLen % 4 == 0 ? 0 : 1);
     std::vector<int> ints(intLen);
     size_t i = 0, b = 0;
 
