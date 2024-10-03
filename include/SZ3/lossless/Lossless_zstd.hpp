@@ -23,7 +23,6 @@ namespace SZ3 {
             // size_t estimatedCompressedSize = srcSize < 100 ? 200 : srcSize * 1.2;
             // uchar *dstPos = dst;
             size_t dstSize = ZSTD_compressBound(srcSize);
-
             // write(srcSize, dstPos);
   
             size_t const countSize = ZSTD_compress(dst, dstSize, src, srcSize, compression_level);
@@ -66,6 +65,14 @@ namespace SZ3 {
 //            compressedSize = dataLength;
 //            return oriData;
         }
+        size_t getCompressBound(size_t srcLen) {
+            return ZSTD_compressBound(srcLen);
+        }
+
+        size_t getFrameConteneSize(const uchar *src, const size_t srcLen) {
+            return (size_t)ZSTD_getFrameContentSize(src, srcLen);
+        }
+
         // uchar *decompress(const uchar *src, size_t &srcSize,) {
         //     const uchar *dataPos = data;
         //     size_t dataLength = 0;
