@@ -145,12 +145,16 @@ namespace SZ3 {
                 std::cout << "Level = " << level << " , quant size = " << quant_inds.size() << ", Time = " << timer.stop() << std::endl;
             }
 
-            for (uint level = level_progressive; level > 0; level--) {
-                for (const auto &direction: directions) {
-                    block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
-                                        interpolators[interpolator_id], direction, 1U << (level - 1), true);
-                }
-            }
+            // if (level_progressive == levels) {
+            //     *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
+            // }
+            // for (uint level = level_progressive; level > 0; level--) {
+
+            //     for (const auto &direction: directions) {
+            //         block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
+            //                             interpolators[interpolator_id], direction, 1U << (level - 1), true);
+            //     }
+            // }
             printf("------[Log] Loading non-progressive data...\n");
             printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
 
@@ -158,7 +162,7 @@ namespace SZ3 {
 
             int lsize = N * level_progressive, bsize = bitgroup.size();
             std::vector<int> bsum(lsize), bdelta(lsize);
-            
+
             std::cout << "Progressive decompression..." << std::endl;
 
             //load non-progressive levels
@@ -166,12 +170,12 @@ namespace SZ3 {
             std::vector<size_t> size_lb(lsize * bsize);
             //load all progressive levels into memory
             for (int l = 0; l < lsize; l++) {
-                for (int b = bsize - 1; b >= 0; b--) {
-                    data_lb[l * bsize + b] = prog_data_pos;
-                    size_lb[l * bsize + b] = lossless_size[lossless_id];
-                    prog_data_pos += lossless_size[lossless_id];
-                    lossless_id++;
-                }
+                    for (int b = bsize - 1; b >= 0; b--) {
+                        data_lb[l * bsize + b] = lossless_data;
+                        size_lb[l * bsize + b] = lossless_size[lossless_id];
+                        lossless_data += lossless_size[lossless_id];
+                        lossless_id++;
+                    }
             }
 
             // {   // verify bdelta
@@ -188,12 +192,12 @@ namespace SZ3 {
             //     }
             //     assert(legal);
             // }
-            {   // verification
-                double psnr, nrmse, max_err, range;
-                verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-            }
+            // {   // verification
+            //     double psnr, nrmse, max_err, range;
+            //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+            // }
             for(int l = 0; l < lsize; l++){
-                bdelta[l] = std::min(bsize - 5, 32);
+                bdelta[l] = std::max(std::min(bsize, 3), 0);
             }    
             // for(int l = lsize - 1; l >= 0; l--)
             // {
@@ -201,6 +205,11 @@ namespace SZ3 {
             // }
             if(level_progressive > 0)
             {
+                decompress_progressive(dec_data, data, 
+                                    bsum, bdelta,
+                                    bsize, lsize,
+                                    data_lb, size_lb,
+                                    levelSize, level_cnt);
                 decompress_progressive(dec_data, data, 
                                     bsum, bdelta,
                                     bsize, lsize,
@@ -224,6 +233,7 @@ namespace SZ3 {
                                 std::vector<size_t> & levelSize,
                                 size_t & level_cnt
                                 ) {
+            size_t level_cnt_temp = level_cnt;
             {   // print eg.1 1 0 -> 1 1 1
                 printf("\n-----------------------\n");
                 for (int l = 0; l < lsize; l++) {
@@ -236,6 +246,24 @@ namespace SZ3 {
                 printf("\n");
             }
             Timer timer(true);
+
+            bool retrive = true;
+            {   // retrive = if elements in bsum are all zeros
+                for(auto i : bsum){
+                    if(i){
+                        retrive = false;
+                        break;
+                    }
+                }
+                if(retrive && level_progressive != levels){
+                    for (uint l = level_progressive; l > 0; l--) {
+                        for (const auto &direction: directions) {
+                            block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
+                                                interpolators[interpolator_id], direction, 1U << (l - 1), true);
+                        }
+                    }
+                }
+            }
 
             ska::unordered_map<std::string, double> result;
             dec_delta.clear();
@@ -264,17 +292,31 @@ namespace SZ3 {
                         }
                         level_cnt++; 
                     }
+                    if(level_progressive == levels && lid == 0) // retrive
+                    {
+                        if(retrive){
+                            *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
+                            for (uint l = level_progressive; l > 0; l--) {
+                                for (const auto &direction: directions) {
+                                    block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
+                                                        interpolators[interpolator_id], direction, 1U << (l - 1), true);
+                                }
+                            }
+                        } else {
+                            quant_cnt++;
+                        }
+                    }
                     block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
                                         &SZProgressiveMQuant::recover_set_delta,
                                         interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
                     bsum[lid] = bg_end;
                 }
             }  
+            level_cnt = level_cnt_temp;
             {   // verification
                 double psnr, nrmse, max_err, range, l2_no_propo = 0;
                 verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
                 printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
-
             }
             return dec_data;
         }
@@ -408,11 +450,11 @@ namespace SZ3 {
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
-    //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
+       std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
     //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-       std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
 
@@ -509,7 +551,7 @@ namespace SZ3 {
                     l2_error += error[i] * error[i];
                 }
                 l2_diff[lid * bsize + b] = l2_error - ((b == bsize - 1) ? l2_error_base : l2_diff[lid * bsize + b + 1]);
-                printf("l2 = %.10G , diff = %.10G\n", l2_error, l2_diff[lid * bsize + b]);
+                // printf("l2 = %.10G , diff = %.10G\n", l2_error, l2_diff[lid * bsize + b]);
                 shift += bitgroup[b];
 
                 if (bitgroup[b] == 1) {
