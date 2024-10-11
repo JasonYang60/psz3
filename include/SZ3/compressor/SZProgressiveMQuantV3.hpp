@@ -197,7 +197,7 @@ namespace SZ3 {
             //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             // }
             for(int l = 0; l < lsize; l++){
-                bdelta[l] = std::max(std::min(bsize, 3), 0);
+                bdelta[l] = std::max(std::min(bsize, 16), 0);
             }    
             // for(int l = lsize - 1; l >= 0; l--)
             // {
@@ -306,9 +306,14 @@ namespace SZ3 {
                             quant_cnt++;
                         }
                     }
-                    block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
-                                        &SZProgressiveMQuant::recover_set_delta,
-                                        interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
+                    if (bsum[lid] == 0) {
+                        block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover,
+                                            interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
+                    } else {
+                        block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
+                                            &SZProgressiveMQuant::recover_set_delta,
+                                            interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
+                    }
                     bsum[lid] = bg_end;
                 }
             }  
@@ -450,11 +455,11 @@ namespace SZ3 {
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
-       std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
+    //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
     //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-    //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+       std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
 
@@ -676,6 +681,10 @@ namespace SZ3 {
         inline void recover_set_delta(size_t idx, T &d, T pred) {
             quantizer.recover_and_residual(idx, d, dec_delta[idx], pred, quant_inds[quant_cnt++]);
         };
+
+        inline void recover_only_set_delta(size_t idx, T&d, T pred) {
+            quantizer.recover_only_set_deltaover(idx, dec_delta[idx], pred, quant_inds[quant_cnt++]);
+        }
 
 
         inline void fill(size_t idx, T &d, T pred) {

@@ -85,6 +85,14 @@ namespace SZ3 {
             }
         }
 
+        void recover_only_set_delta(size_t idx, T &delta, T pred, int quant_index) {
+            if (!isunpred[idx]) {
+                delta += recover_pred(pred, quant_index);
+            } else {
+                delta = 0;
+            }
+        }
+
         void recover_and_residual(size_t idx, T &dest, T &delta, T pred) {
             if (!isunpred[idx]) {
                 dest += pred;
