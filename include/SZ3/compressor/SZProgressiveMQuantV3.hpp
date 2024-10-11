@@ -197,7 +197,7 @@ namespace SZ3 {
             //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             // }
             for(int l = 0; l < lsize; l++){
-                bdelta[l] = std::max(std::min(bsize, 16), 0);
+                bdelta[l] = std::max(std::min(bsize,  bsize - 7), 0);
             }    
             // for(int l = lsize - 1; l >= 0; l--)
             // {
@@ -209,12 +209,15 @@ namespace SZ3 {
                                     bsum, bdelta,
                                     bsize, lsize,
                                     data_lb, size_lb,
-                                    levelSize, level_cnt);
-                decompress_progressive(dec_data, data, 
-                                    bsum, bdelta,
-                                    bsize, lsize,
-                                    data_lb, size_lb,
-                                    levelSize, level_cnt);
+                                    levelSize, level_cnt, false);
+            //                         for(int l = 0; l < lsize; l++){
+            //     bdelta[l] = std::max(std::min(bsize, 32 * ((l + 1) % 2)), 0);
+            // }    
+                // decompress_progressive(dec_data, data, 
+                //                     bsum, bdelta,
+                //                     bsize, lsize,
+                //                     data_lb, size_lb,
+                //                     levelSize, level_cnt, true);
             }
             
             return dec_data;
@@ -231,7 +234,8 @@ namespace SZ3 {
                                 std::vector<uchar const *> & data_lb,
                                 std::vector<size_t> & size_lb,
                                 std::vector<size_t> & levelSize,
-                                size_t & level_cnt
+                                size_t & level_cnt,
+                                bool update
                                 ) {
             size_t level_cnt_temp = level_cnt;
             {   // print eg.1 1 0 -> 1 1 1
@@ -306,17 +310,22 @@ namespace SZ3 {
                             quant_cnt++;
                         }
                     }
-                    if (bsum[lid] == 0) {
+                    if (!update) {
                         block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover,
                                             interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
                     } else {
-                        block_interpolation(dec_data, dec_delta.data(), global_begin, global_end,
-                                            &SZProgressiveMQuant::recover_set_delta,
+                        block_interpolation(dec_delta.data(), dec_delta.data(), global_begin, global_end,
+                                            &SZProgressiveMQuant::recover_only_set_delta,
                                             interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
                     }
                     bsum[lid] = bg_end;
                 }
             }  
+            if (update) {
+                for (size_t idx = 0; idx < num_elements; idx++) {
+                    quantizer.recover_from_delta(idx, dec_data[idx], dec_delta[idx]);
+                }
+            }
             level_cnt = level_cnt_temp;
             {   // verification
                 double psnr, nrmse, max_err, range, l2_no_propo = 0;
@@ -683,7 +692,7 @@ namespace SZ3 {
         };
 
         inline void recover_only_set_delta(size_t idx, T&d, T pred) {
-            quantizer.recover_only_set_deltaover(idx, dec_delta[idx], pred, quant_inds[quant_cnt++]);
+            quantizer.recover_only_set_delta(idx, dec_delta[idx], pred, quant_inds[quant_cnt++]);
         }
 
 
