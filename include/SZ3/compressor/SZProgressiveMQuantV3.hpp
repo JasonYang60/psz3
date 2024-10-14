@@ -192,12 +192,12 @@ namespace SZ3 {
             //     }
             //     assert(legal);
             // }
-            // {   // verification
-            //     double psnr, nrmse, max_err, range;
-            //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-            // }
+            {   // verification
+                double psnr, nrmse, max_err, range;
+                verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+            }
             for(int l = 0; l < lsize; l++){
-                bdelta[l] = std::max(std::min(bsize,  bsize - 7), 0);
+                bdelta[l] = std::max(std::min(bsize,  bsize), 0);
             }    
             // for(int l = lsize - 1; l >= 0; l--)
             // {
@@ -213,6 +213,18 @@ namespace SZ3 {
             //                         for(int l = 0; l < lsize; l++){
             //     bdelta[l] = std::max(std::min(bsize, 32 * ((l + 1) % 2)), 0);
             // }    
+                // decompress_progressive(dec_data, data, 
+                //                     bsum, bdelta,
+                //                     bsize, lsize,
+                //                     data_lb, size_lb,
+                //                     levelSize, level_cnt, true);
+                // bdelta[0] = 0;
+                // bdelta[1] = 16;
+                // decompress_progressive(dec_data, data, 
+                //                     bsum, bdelta,
+                //                     bsize, lsize,
+                //                     data_lb, size_lb,
+                //                     levelSize, level_cnt, true);
                 // decompress_progressive(dec_data, data, 
                 //                     bsum, bdelta,
                 //                     bsize, lsize,
@@ -343,6 +355,17 @@ namespace SZ3 {
             size_t interp_compressed_size = 0;
             size_t quant_inds_total = 0;
 
+            T range = 0;
+            {
+                T max = data[0];
+                T min = data[0];
+                for (size_t i = 1; i < num_elements; i++) {
+                    if (max < data[i]) max = data[i];
+                    if (min > data[i]) min = data[i];
+                }
+                range = max - min;
+            }
+
             T eb = quantizer.get_eb();
             std::cout << "Absolute error bound = " << eb << std::endl;
 //            quantizer.set_eb(eb * eb_ratio);
@@ -400,6 +423,18 @@ namespace SZ3 {
 
             }
 
+            // T *partial_data = new T[num_elements]; 
+            // memcpy(partial_data, data, num_elements * sizeof(T));
+            // if (level_progressive == levels) {
+            //     *partial_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
+            // }
+            // for (uint l = level_progressive; l > 0; l--) {
+            //     for (const auto &direction: directions) {
+            //         block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
+            //                             interpolators[interpolator_id], direction, 1U << (l - 1), true);
+            //     }
+            // }
+
             for (uint level = level_progressive; level > 0; level--) {
                 timer.start();
 
@@ -433,6 +468,7 @@ namespace SZ3 {
             quantizer.save(buffer_pos);
             size_t size = lossless.compress(buffer, buffer_pos - buffer, lossless_data_pos);
             delete[] buffer;
+            
             lossless_data_pos += size;
             lossless_size.push_back(size);
 
