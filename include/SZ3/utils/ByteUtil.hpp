@@ -55,9 +55,23 @@ inline void symTransform_4bytes(uchar data[4]) {
     data[2] = tmp;
 }
 
-inline int16_t bytesToInt16_bigEndian(unsigned char *bytes) {
+inline int16_t bytesToInt16_bigEndian(const unsigned char *bytes) {
     int16_t temp = 0;
     int16_t res = 0;
+
+    temp = bytes[0] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = bytes[1] & 0xff;
+    res |= temp;
+
+    return res;
+}
+
+inline uint16_t bytesToUInt16_bigEndian(const uchar *bytes) {
+    uint16_t temp = 0;
+    uint16_t res = 0;
 
     temp = bytes[0] & 0xff;
     res |= temp;
@@ -92,9 +106,71 @@ inline int32_t bytesToInt32_bigEndian(const unsigned char *bytes) {
     return res;
 }
 
+inline uint32_t bytesToUInt32_bigEndian(const uchar *bytes) {
+    uint32_t temp = 0;
+    uint32_t res = 0;
+
+    res <<= 8;
+    temp = bytes[0] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = bytes[1] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = bytes[2] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = bytes[3] & 0xff;
+    res |= temp;
+
+    return res;
+}
+
 inline int64_t bytesToInt64_bigEndian(const unsigned char *b) {
     int64_t temp = 0;
     int64_t res = 0;
+
+    res <<= 8;
+    temp = b[0] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[1] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[2] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[3] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[4] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[5] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[6] & 0xff;
+    res |= temp;
+
+    res <<= 8;
+    temp = b[7] & 0xff;
+    res |= temp;
+
+    return res;
+}
+
+inline uint64_t bytesToUInt64_bigEndian(const uchar *b) {
+    uint64_t temp = 0;
+    uint64_t res = 0;
 
     res <<= 8;
     temp = b[0] & 0xff;

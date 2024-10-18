@@ -130,7 +130,7 @@ namespace SZ3 {
         }
 
 
-        uint save(uchar *&p) {
+        void save(uchar *&p) {
 
             int numOfRealStates = ariCoder.numOfRealStates;
             int numOfValidStates = ariCoder.numOfValidStates;
@@ -139,9 +139,9 @@ namespace SZ3 {
 
             unsigned int outSize = 0;
 
-            intToBytes_bigEndian(p, numOfRealStates);
+            int32ToBytes_bigEndian(p, numOfRealStates);
             p += sizeof(int);
-            intToBytes_bigEndian(p, numOfValidStates);
+            int32ToBytes_bigEndian(p, numOfValidStates);
             p += sizeof(int);
             int64ToBytes_bigEndian(p, total_frequency);
             p += sizeof(uint64_t);
@@ -286,7 +286,7 @@ namespace SZ3 {
                     outSize = 2 * sizeof(int) + sizeof(uint64_t) + ariCoder.numOfValidStates * 20;
                 }
             }
-            return outSize;
+            // return outSize;
         }
 
 /**
@@ -301,9 +301,9 @@ namespace SZ3 {
 //        int unpad_ariCoder(AriCoder **ariCoder, unsigned char *bytes) {
             int offset = 0;
 
-            int numOfRealStates = ariCoder.numOfRealStates = bytesToInt_bigEndian(p);
+            int numOfRealStates = ariCoder.numOfRealStates = bytesToInt32_bigEndian(p);
             p += sizeof(int);
-            int numOfValidStates = ariCoder.numOfValidStates = bytesToInt_bigEndian(p);
+            int numOfValidStates = ariCoder.numOfValidStates = bytesToInt32_bigEndian(p);
             p += sizeof(int);
             size_t total_frequency = ariCoder.total_frequency = bytesToInt64_bigEndian(p);
             p += sizeof(uint64_t);
@@ -668,7 +668,7 @@ namespace SZ3 {
                 byteSize = bitSize % 8 == 0 ? bitSize / 8 : bitSize / 8 +
                                                             1; //it's equal to the number of bytes involved (for *outSize)
                 byteSizep = bitSize >> 3; //it's used to move the pointer p for next data
-                intToBytes_bigEndian(*p, buf);
+                int32ToBytes_bigEndian(*p, buf);
                 (*p) += byteSizep;
                 *outSize += byteSize;
                 (*lackBits) = bitSize % 8 == 0 ? 0 : 8 - bitSize % 8;
@@ -677,7 +677,7 @@ namespace SZ3 {
                 if ((*lackBits) < bitSize) {
                     (*p)++;
                     int newCode = buf << (*lackBits);
-                    intToBytes_bigEndian(*p, newCode);
+                    int32ToBytes_bigEndian(*p, newCode);
                     bitSize -= *lackBits;
                     byteSizep = bitSize >> 3; // =bitSize/8
                     byteSize = bitSize % 8 == 0 ? byteSizep : byteSizep + 1;

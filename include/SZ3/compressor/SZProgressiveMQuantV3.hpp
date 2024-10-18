@@ -349,6 +349,30 @@ namespace SZ3 {
         
         // compress given the error bound
         uchar *compress(T *data, std::vector<size_t> &lossless_size) {
+
+            // {
+            //     std::vector <int> bins = {0, 1, 1, 1, 0, 1, 1, 1, 
+            //                             0, 1, 1, 1, 0, 1, 1, 1};
+            //     // testing arithmetic encoder.
+            //     encoder.preprocess_encode(bins, bins.size());
+            //     uchar * save_ptr = new uchar [1000];
+            //     uchar * save_ptr_pos = save_ptr;
+            //     encoder.save(save_ptr_pos);
+            //     encoder.encode(bins, save_ptr_pos);
+            //     encoder.postprocess_encode();
+            //     size_t sz = save_ptr_pos - save_ptr;
+            //     {
+            //         // decode
+            //         size_t remaining_length = 0;
+            //         uchar const *save_ptr_pos = save_ptr;
+            //         encoder.load(save_ptr_pos, remaining_length);
+            //         quant_inds = encoder.decode(save_ptr_pos, 16);
+            //         encoder.postprocess_decode();
+            //     }
+            //     delete []save_ptr;
+            // }
+
+
             Timer timer(true);
 
             quant_inds.reserve(num_elements);
@@ -581,7 +605,9 @@ namespace SZ3 {
             double l2_error_base = 0;
             {   // calc the total l2 error
                 for (size_t i = 0; i < qsize; i++) {
-                    l2_error_base += error[i] * error[i];
+                    if(i < error.size()) {
+                        l2_error_base += error[i] * error[i];
+                    }
                 }
                 printf("l2 = %.10G \n", l2_error_base);
             }
@@ -597,8 +623,10 @@ namespace SZ3 {
                     quants[i] = quant_inds[i] & (((uint64_t) 1 << bitgroup[b]) - 1);
                     quant_inds[i] >>= bitgroup[b];
                     int qu = (((uint32_t) quants[i] << shift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
-                    error[i] += qu * 2.0 * eb;
-                    l2_error += error[i] * error[i];
+                    if (i < error.size()) {
+                        error[i] += qu * 2.0 * eb;
+                        l2_error += error[i] * error[i];
+                    }
                 }
                 l2_diff[lid * bsize + b] = l2_error - ((b == bsize - 1) ? l2_error_base : l2_diff[lid * bsize + b + 1]);
                 // printf("l2 = %.10G , diff = %.10G\n", l2_error, l2_diff[lid * bsize + b]);
