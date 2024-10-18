@@ -196,13 +196,15 @@ namespace SZ3 {
                 double psnr, nrmse, max_err, range;
                 verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             }
-            for(int l = 0; l < lsize; l++){
-                bdelta[l] = std::max(std::min(bsize,  bsize), 0);
-            }    
+             
+            std::vector<size_t> throwawayBits = strategy(levelSize, 10);
             // for(int l = lsize - 1; l >= 0; l--)
             // {
             //     bdelta[l] = bsize;
             // }
+            for(int l = 0; l < lsize; l++){
+                bdelta[l] = std::max(std::min(bsize, (int)(bsize - throwawayBits[l])), 0);
+            }   
             if(level_progressive > 0)
             {
                 decompress_progressive(dec_data, data, 
@@ -350,11 +352,20 @@ namespace SZ3 {
         // compress given the error bound
         uchar *compress(T *data, std::vector<size_t> &lossless_size) {
 
+            {
+                std::vector<size_t> levelSize{1, 5, 10};
+                strategy(levelSize, 10);
+
+                int qu = ((int32_t) 7 + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                int dequ = (((uint32_t) qu) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+                std::cout << dequ << std::endl;
+
+            }
             // {
             //     std::vector <int> bins = {0, 1, 1, 1, 0, 1, 1, 1, 
             //                             0, 1, 1, 1, 0, 1, 1, 1};
             //     // testing arithmetic encoder.
-            //     encoder.preprocess_encode(bins, bins.size());
+            //     encoder.preprocess_encode(bins, 2);
             //     uchar * save_ptr = new uchar [1000];
             //     uchar * save_ptr_pos = save_ptr;
             //     encoder.save(save_ptr_pos);
@@ -458,7 +469,7 @@ namespace SZ3 {
             //                             interpolators[interpolator_id], direction, 1U << (l - 1), true);
             //     }
             // }
-
+            
             for (uint level = level_progressive; level > 0; level--) {
                 timer.start();
 
@@ -541,33 +552,57 @@ namespace SZ3 {
 
             size_t length = data_length;
             retrieved_size += length;
+            // artimetic
+            // ---------------
+            
+            // zstd
+            // size_t rSize = lossless.getFrameConteneSize(data_pos, length);
+            // uchar *compressed_data = new uchar[rSize];
+            // length = lossless.decompress(data_pos, length, compressed_data, rSize);
 
-            uchar * compressed_data = nullptr;
-            if (quant_size < 128 && bitgroup[bg] == 1) {
-                compressed_data = new uchar[length];
-                memcpy(compressed_data, data_pos, length);
-            } else {
-                size_t rSize = lossless.getFrameConteneSize(data_pos, length);
-                compressed_data = new uchar[rSize];
-                length = lossless.decompress(data_pos, length, compressed_data, rSize);
-            }
-            uchar const *compressed_data_pos = compressed_data;
-
-            // size_t quant_size;
-            // read(quant_size, compressed_data_pos, length);
-
+            //
+            uchar *compressed_data = new uchar[length];
+            memcpy(compressed_data, data_pos, length);
             std::vector<int> quant_ind_truncated;
-            if (bitgroup[bg] == 1) {
-                quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
-            } else if (bitgroup[bg] == 2) {
-                quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
-            } else {
-                encoder.load(compressed_data_pos, length);
-                quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
-                encoder.postprocess_decode();
-            }
+            uchar const *compressed_data_pos = compressed_data;
+            encoder.load(compressed_data_pos, length);
+            quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
+            encoder.postprocess_decode();
+
+
+            // artimetic ends
+            // ---------------
+            
+            // huffman && zstd
+            // ---------------
+            // uchar * compressed_data = nullptr;
+            // if (quant_size < 128 && bitgroup[bg] == 1) {
+            //     compressed_data = new uchar[length];
+            //     memcpy(compressed_data, data_pos, length);
+            // } else {
+            //     size_t rSize = lossless.getFrameConteneSize(data_pos, length);
+            //     compressed_data = new uchar[rSize];
+            //     length = lossless.decompress(data_pos, length, compressed_data, rSize);
+            // }
+            // uchar const *compressed_data_pos = compressed_data;
+
+            // // size_t quant_size;
+            // // read(quant_size, compressed_data_pos, length);
+
+            // std::vector<int> quant_ind_truncated;
+            // if (bitgroup[bg] == 1) {
+            //     quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
+            // } else if (bitgroup[bg] == 2) {
+            //     quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
+            // } else {
+            //     encoder.load(compressed_data_pos, length);
+            //     quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
+            //     encoder.postprocess_decode();
+            // }
 
             // lossless.postdecompress_data(compressed_data);
+            // huffman && zstd ends
+            // ---------------
             delete[] compressed_data;
 
 
@@ -632,36 +667,64 @@ namespace SZ3 {
                 // printf("l2 = %.10G , diff = %.10G\n", l2_error, l2_diff[lid * bsize + b]);
                 shift += bitgroup[b];
 
-                if (bitgroup[b] == 1) {
-                    encode_int_1bit(quants, buffer_pos);
-                } else if (bitgroup[b] == 2) {
-                    encode_int_2bits(quants, buffer_pos);
-                } else {
-                    //TODO huffman tree is huge if using large radius on early levels
-                    // set different radius for each level
-                    encoder.preprocess_encode(quants, 0);
-                    encoder.save(buffer_pos);
-                    encoder.encode(quants, buffer_pos);
-                    encoder.postprocess_encode();
-                }
 
-                if(qsize < 128 && bitgroup[b] == 1) {
-                    memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
-                    size_t size = buffer_pos - buffer;
-    //                printf("%d %lu, ", bitgroup[b], size);
-                    total_size += size;
-                    lossless_data_pos += size;
-                    lossless_size.push_back(size);
-                } else {
-                    size_t size = lossless.compress(
-                            buffer, buffer_pos - buffer, lossless_data_pos);
-    //                printf("%d %lu, ", bitgroup[b], size);
-                    total_size += size;
-                    lossless_data_pos += size;
-                    lossless_size.push_back(size);
-                }
+                // ---------------
+                // arithemetic
+                encoder.preprocess_encode(quants, 2);
+                encoder.save(buffer_pos);
+                encoder.encode(quants, buffer_pos);
+                encoder.postprocess_encode();
+                
+                memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
+                size_t size = buffer_pos - buffer;
+                total_size += size;
+                lossless_data_pos += size;
+                lossless_size.push_back(size);
+                // zstd
+                // size_t size = lossless.compress(
+                //             buffer, buffer_pos - buffer, lossless_data_pos);
+                // total_size += size;
+                // lossless_data_pos += size;
+                // lossless_size.push_back(size);
+
+                // arithemetic end
+                // ---------------
+
+                // ---------------
+                // huffman && zstd
+    //             if (bitgroup[b] == 1) {
+    //                 encode_int_1bit(quants, buffer_pos);
+    //             } else if (bitgroup[b] == 2) {
+    //                 encode_int_2bits(quants, buffer_pos);
+    //             } else {
+    //                 //TODO huffman tree is huge if using large radius on early levels
+    //                 // set different radius for each level
+    //                 encoder.preprocess_encode(quants, 0);
+    //                 encoder.save(buffer_pos);
+    //                 encoder.encode(quants, buffer_pos);
+    //                 encoder.postprocess_encode();
+    //             }
+
+    //             if(qsize < 128 && bitgroup[b] == 1) {
+    //                 memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
+    //                 size_t size = buffer_pos - buffer;
+    // //                printf("%d %lu, ", bitgroup[b], size);
+    //                 total_size += size;
+    //                 lossless_data_pos += size;
+    //                 lossless_size.push_back(size);
+    //             } else {
+    //                 size_t size = lossless.compress(
+    //                         buffer, buffer_pos - buffer, lossless_data_pos);
+    // //                printf("%d %lu, ", bitgroup[b], size);
+    //                 total_size += size;
+    //                 lossless_data_pos += size;
+    //                 lossless_size.push_back(size);
+    //             }
+                // huffman && zstd ends
+                // ---------------
             }
 //            printf("\n");
+            
             delete[]buffer;
             quant_inds.clear();
             error.clear();
@@ -705,7 +768,8 @@ namespace SZ3 {
             if (quant_inds.size() < 128) {
                 write(quant_inds.data(), quant_inds.size(), compressed_data_pos);
             } else {
-                encoder.preprocess_encode(quant_inds, 0);
+                // encoder.preprocess_encode(quant_inds, 0);// for huffman
+                encoder.preprocess_encode(quant_inds, 0);// for huffman
                 encoder.save(compressed_data_pos);
                 encoder.encode(quant_inds, compressed_data_pos);
                 encoder.postprocess_encode();
@@ -888,6 +952,140 @@ namespace SZ3 {
             for (const auto &id: global_idx) {
                 printf("%lu ", id);
             }
+        }
+
+        std::vector<size_t> strategy(const std::vector<size_t> &levelSize, int limit) {
+            // assert(levelSize.size() == N * level_progressive);
+            assert(limit > 0);
+            std::vector<size_t> throwawayBits;
+            size_t sizelb = levelSize.size();
+            throwawayBits.resize(sizelb, 0);
+
+            int BITGROUP_SEARCHING_LIMIT = 30;
+            // std::vector<long long> dp(limit + 1, -1);
+            // dp[0] = 0;
+
+            // for (int i = 0; i < N * level_progressive; i++) {
+            //     // 
+            //     for (int y_i = 0; y_i <= 30; y_i++) {
+            //         int value = y_i * levelSize[i];
+            //         int cost = (1 << y_i);  
+                    
+            //         for (int j = limit; j >= cost; j--) {
+            //             if (dp[j - cost] != -1 && dp[j - cost] + value > dp[j]) {
+            //                 dp[j] = dp[j - cost] + value;
+            //             }
+            //         }
+            //     }
+            // }
+            // int best_j = 0;
+            // for (int j = 1; j <= limit; j++) {
+            //     if (dp[j] > dp[best_j]) {
+            //         best_j = j;
+            //     }
+            // }
+
+            // for (int i = N * level_progressive - 1; i >= 0; i--) {
+            //     for (int y_i = 30; y_i >= 0; y_i--) {
+            //         int cost = (1 << y_i);
+            //         int value = y_i * levelSize[i];
+            //         if (best_j >= cost && dp[best_j - cost] != -1 && dp[best_j - cost] + value == dp[best_j]) {
+            //             throwawayBits[i] = y_i;
+            //             best_j -= cost;
+            //             break;
+            //         }
+            //     }
+            // }
+            // std::vector<std::vector<int>> last_dp(E + 1, vector<int>(l, -1)); 
+
+            std::vector<int> NonZeroMap(sizelb, -1);
+            size_t NewSizelb = sizelb;
+            for(size_t i = 0; i < sizelb; i++){
+                bool foundOne = false;
+                for(size_t j = (i > 0) ? NonZeroMap[i - 1] + 1 : 0; j < sizelb; j++){
+                    if(levelSize[j] > 0){
+                        NonZeroMap[i] = j;
+                        foundOne = true;
+                        break;
+                    }
+                }
+                if (!foundOne){
+                    NewSizelb = i;
+                    break;
+                }
+            }
+            std::vector<size_t> NonZeroLevelSize;
+            NonZeroLevelSize.reserve(NewSizelb);
+            for(size_t i = 0; i < NewSizelb; i++){
+                if(NonZeroMap[i] >= 0){
+                    NonZeroLevelSize.push_back(levelSize[NonZeroMap[i]]);
+                } else {
+                    break;
+                }
+            }
+
+            std::vector<std::vector<long long>> dp(NewSizelb + 1, std::vector<long long>(limit + 1, 0));
+
+            for (size_t i = 1; i <= NewSizelb; i++){
+                for(size_t j = 0; j <= limit; j++){
+                    long long maxValue = 0;
+                    size_t max_j = 0;
+                    for(int k = 0; k <= BITGROUP_SEARCHING_LIMIT; k++){
+                        unsigned int cost_k = (k == 0) ? 0 : (0xaaaaaaaau >> (32 - k)) << 1;
+
+                        if (j >= cost_k){
+                            long long value = dp[i - 1][j - cost_k] + k * NonZeroLevelSize[i - 1];
+                            if (value > maxValue){
+                                max_j = j;
+                                maxValue = value;
+                            }
+                        }
+                    }
+                    dp[i][j] = maxValue;
+                }
+            }
+            size_t remaining_limit = limit;
+            for (size_t i = NewSizelb; i >= 1; i--){
+                for (int k = 0; k <= BITGROUP_SEARCHING_LIMIT; k++){
+                    unsigned int cost_k = (k == 0) ? 0 : (0xaaaaaaaau >> (32 - k)) << 1;
+
+                    if (remaining_limit < cost_k) {break;}
+                    if (dp[i][remaining_limit] == dp[i - 1][remaining_limit - cost_k] + k * NonZeroLevelSize[i - 1]){
+                        throwawayBits[NonZeroMap[i - 1]] = k;
+                        remaining_limit -= cost_k;
+                        break;
+                    }
+                }
+            }
+            // 用于记录每个状态的 y 值
+
+            // 遍历每个物品
+            // for (int i = 0; i < N * level_progressive; i++) {
+            // // 遍历可能的 y_i 值
+            // for (int y_i = 30; y_i >= 0; y_i--) { // 从高到低遍历以防覆盖
+            //     int cost = (1 << y_i); // 2^y_i
+            //     int value = y_i * levelSize[i]; // y_i * N[i]
+                
+            //     // 倒序遍历 dp 数组
+            //     for (int j = limit; j >= cost; j--) {
+            //         if (dp[j - cost] + value > dp[j]) {
+            //             dp[j] = dp[j - cost] + value; // 更新最大收益
+            //             throwawayBits[i] = y_i; // 记录当前的 y 值
+            //         }
+            //     }
+            // }
+            // }
+
+            // // 找到最大收益对应的 j 值
+            // long long max_profit = 0;
+            // int best_j = 0;
+            // for (int j = 1; j <= limit; j++) {
+            // if (dp[j] > max_profit) {
+            //     max_profit = dp[j];
+            //     best_j = j;
+            // }
+            // }
+            return throwawayBits;
         }
 
 
