@@ -13,7 +13,9 @@ namespace SZ3 {
 
     template<class T>
     inline T interp_linear1(T a, T b) {
-        return -0.5 * a + 1.5 * b;
+        // return -0.5 * a + 1.5 * b;
+        return b;
+
     }
 
     template<class T>

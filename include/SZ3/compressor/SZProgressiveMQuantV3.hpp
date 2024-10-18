@@ -197,7 +197,7 @@ namespace SZ3 {
                 verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             }
              
-            std::vector<size_t> throwawayBits = strategy(levelSize, 10);
+            std::vector<size_t> throwawayBits = strategy(levelSize, 500);
             // for(int l = lsize - 1; l >= 0; l--)
             // {
             //     bdelta[l] = bsize;
