@@ -91,17 +91,27 @@ namespace SZ3 {
                 verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             }
 
-            for (int i = 0; i < 3; i++){
+            for (int i = 0; i < 0; i++){
                 bsum.clear();
                 bsum.resize(lsize, 0);
-
+                // if (i == 1) {
+                //     std::vector<size_t> throwawayBits = strategy(levelSize, 10);
+                //     for(int j = 0; j < lsize; j++){
+                //         bdelta[j] = bsize - throwawayBits[j];
+                //     }
+                // }
+                // if (i == 2) {
+                //     std::vector<size_t> throwawayBits = strategy(levelSize, 1000);
+                //     for(int j = 0; j < lsize; j++){
+                //         bdelta[j] = bsize - throwawayBits[j];
+                //     }
+                // }
                 compressed_size = decompress(lossless_data_pos, residuel_data, bsum, bdelta, levelSize);
                 lossless_data_pos += compressed_size;
 
                 for (size_t i = 0; i < num_elements; i++){
                     dec_data[i] += residuel_data[i];
                 }
-                // std::vector<size_t> throwawayBits = strategy(levelSize, 500);
                 {   // verification
                     double psnr, nrmse, max_err, range;
                     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
@@ -364,7 +374,7 @@ namespace SZ3 {
 
             std::vector<T> err_data{error};
             // uchar *lossless_data_new = new uchar[size_t((num_elements < 1000000 ? 100 : 1.5) * num_elements) * sizeof(T)]; //?
-            std::vector<T> ebs = {1e-2, 1e-4, 1e-6};
+            std::vector<T> ebs = {};
             for(auto eb : ebs){
                 quantizer.set_eb(eb);
                     // memcpy(lossless_data_pos, error.data(), num_elements * sizeof(T));
