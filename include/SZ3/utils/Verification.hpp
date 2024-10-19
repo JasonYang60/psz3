@@ -143,11 +143,11 @@ namespace SZ3 {
         nrmse = sqrt(mse) / range;
 
         printf("[Verify]L2 error = %.10G\n", l2_err);
-//        printf("Min=%.20G, Max=%.20G, range=%.20G\n", Min, Max, range);
-        printf("[Verify]Max absolute error = %.2G\n", max_err);
+        printf("[Verify]Min=%.20G, Max=%.20G, range=%.20G\n", Min, Max, range);
+        printf("[Verify]Max absolute error = %.2G, idx = %d\n", max_err, max_err_idx);
 //        printf("Max relative error = %.2G\n", max_err / (Max - Min));
 //        printf("Max pw relative error = %.2G\n", maxpw_relerr);
-       printf("[Verify]PSNR = %f, NRMSE= %.10G\n", psnr, nrmse);
+        printf("[Verify]PSNR = %f, NRMSE= %.10G\n", psnr, nrmse);
 //        printf("PSNR = %f, NRMSE= %.10G L2Error= %.10G\n", psnr, nrmse, l2_err);
 //        printf("acEff=%f\n", acEff);
 //        printf("errAutoCorr=%.10f\n", autocorrelation1DLag1<double>(diff, num_elements, diff_sum / num_elements));

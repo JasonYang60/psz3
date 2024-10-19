@@ -38,7 +38,7 @@ namespace SZ3 {
                 interpolators({"linear", "cubic"}),
                 interpolator_id(interpolator),
                 interp_dim_limit(interp_dim_limit),
-                level_progressive(level_progressive_),
+                // level_progressive(level_progressive_),
                 block_size(block_size_)
 //                level_fill(level_fill_)
         {
@@ -68,26 +68,78 @@ namespace SZ3 {
             }
             set_directions_and_stride(direction_id_);
 
+            level_progressive = levels;
+
         }
 
-        T *decompress_v3(uchar const *lossless_data, const std::vector<size_t> &lossless_size, T *data) {
+        T *decompress(uchar const *lossless_data, T *data) {
+            // size_t total_compressed_size;
+            // uchar * compressed = compress(data.get(), total_compressed_size);
+
+
+            int lsize = N * level_progressive, bsize = bitgroup.size();
+            std::vector<size_t> levelSize(lsize, 0);
+            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+            size_t compressed_size = 0;
+            uchar const * lossless_data_pos = lossless_data;
+            T *dec_data = new T[num_elements]; // exceed num_elements?
+            T *residuel_data = new T[num_elements];
+            compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize);
+            lossless_data_pos += compressed_size;
+            {   // verification
+                double psnr, nrmse, max_err, range;
+                verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+            }
+
+            for (int i = 0; i < 3; i++){
+                bsum.clear();
+                bsum.resize(lsize, 0);
+
+                compressed_size = decompress(lossless_data_pos, residuel_data, bsum, bdelta, levelSize);
+                lossless_data_pos += compressed_size;
+
+                for (size_t i = 0; i < num_elements; i++){
+                    dec_data[i] += residuel_data[i];
+                }
+                // std::vector<size_t> throwawayBits = strategy(levelSize, 500);
+                {   // verification
+                    double psnr, nrmse, max_err, range;
+                    verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+                }
+            }
+            return dec_data;
+        }
+
+        size_t decompress(uchar const *lossless_data, 
+                            T *dec_data,
+                            std::vector<int>& bsum,
+                            const std::vector<int>& bdelta,
+                            std::vector<size_t> &levelSize
+                            ) {
             Timer timer(true);
             quant_inds.reserve(num_elements);
+
+            uchar const *buffer = lossless_data;
+
+            //load lossless_size
+            size_t lossless_size_size = 0;
+            read(lossless_size_size, buffer);
+            std::vector<size_t> lossless_size(lossless_size_size, 0);
+            read(lossless_size.data(), lossless_size_size, buffer);
+            size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
 
             //load dim && l2_diff
             size_t buffer_len = lossless_size[0];
             retrieved_size += buffer_len;
-            uchar const *buffer = lossless_data;
+            buffer_len -= (lossless_size_size + 1) * sizeof(size_t);
             uchar const *cmp_data_pos = lossless_data;
             read(global_dimensions.data(), N, buffer, buffer_len);
             num_elements = std::accumulate(global_dimensions.begin(), global_dimensions.end(), (size_t) 1, std::multiplies<>());
             read(interp_dim_limit, buffer, buffer_len);
-            std::vector<size_t> levelSize;
             size_t level_cnt = 0;
-            levelSize.resize(levels * N);
             read(levelSize.data(), levelSize.size(), buffer, buffer_len);
             l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
-            read(l2_diff.data(), l2_diff.size(), buffer, buffer_len);
+            // read(l2_diff.data(), l2_diff.size(), buffer, buffer_len);
 
             {   // load unpredictable data
                 {   // mv buffer pointer to the address of unpredictable data
@@ -112,38 +164,37 @@ namespace SZ3 {
             int lossless_id = 1;        // ???
             lossless_data += lossless_size[0];
 
-            T *dec_data = new T[num_elements]; // exceed num_elements?
 
-            for (uint level = levels; level > level_progressive; level--) {
-                timer.start();
-                size_t stride = 1U << (level - 1);
+            // for (uint level = levels; level > level_progressive; level--) {
+            //     timer.start();
+            //     size_t stride = 1U << (level - 1);
 
-                lossless_decode(lossless_data, lossless_size, lossless_id++, levelSize[level_cnt++]);
+            //     lossless_decode(lossless_data, lossless_size, lossless_id++, levelSize[level_cnt++]);
 
-                if (level == levels) {
-                    *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
-                }
+            //     if (level == levels) {
+            //         *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
+            //     }
 
-                auto block_range = std::make_shared<
-                        SZ3::multi_dimensional_range<T, N>>(dec_data,
-                                                           std::begin(global_dimensions), std::end(global_dimensions),
-                                                           stride * interp_dim_limit, 0);
-                for (auto block = block_range->begin(); block != block_range->end(); ++block) {
-                    auto end_idx = block.get_global_index();
-                    for (int i = 0; i < N; i++) {
-                        end_idx[i] += stride * interp_dim_limit;
-                        if (end_idx[i] > global_dimensions[i] - 1) {
-                            end_idx[i] = global_dimensions[i] - 1;
-                        }
-                    }
-                    for (const auto &direction: directions) {
-                        block_interpolation(dec_data, dec_data, block.get_global_index(), end_idx, &SZProgressiveMQuant::recover,
-                                            interpolators[interpolator_id], direction, stride, true);
-                    }
-                }
-                quantizer.postdecompress_data();
-                std::cout << "Level = " << level << " , quant size = " << quant_inds.size() << ", Time = " << timer.stop() << std::endl;
-            }
+            //     auto block_range = std::make_shared<
+            //             SZ3::multi_dimensional_range<T, N>>(dec_data,
+            //                                                std::begin(global_dimensions), std::end(global_dimensions),
+            //                                                stride * interp_dim_limit, 0);
+            //     for (auto block = block_range->begin(); block != block_range->end(); ++block) {
+            //         auto end_idx = block.get_global_index();
+            //         for (int i = 0; i < N; i++) {
+            //             end_idx[i] += stride * interp_dim_limit;
+            //             if (end_idx[i] > global_dimensions[i] - 1) {
+            //                 end_idx[i] = global_dimensions[i] - 1;
+            //             }
+            //         }
+            //         for (const auto &direction: directions) {
+            //             block_interpolation(dec_data, dec_data, block.get_global_index(), end_idx, &SZProgressiveMQuant::recover,
+            //                                 interpolators[interpolator_id], direction, stride, true);
+            //         }
+            //     }
+            //     quantizer.postdecompress_data();
+            //     std::cout << "Level = " << level << " , quant size = " << quant_inds.size() << ", Time = " << timer.stop() << std::endl;
+            // }
 
             // if (level_progressive == levels) {
             //     *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
@@ -155,15 +206,14 @@ namespace SZ3 {
             //                             interpolators[interpolator_id], direction, 1U << (level - 1), true);
             //     }
             // }
-            printf("------[Log] Loading non-progressive data...\n");
-            printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
 
             uchar const *prog_data_pos = lossless_data;
 
-            int lsize = N * level_progressive, bsize = bitgroup.size();
-            std::vector<int> bsum(lsize), bdelta(lsize);
+            
 
             std::cout << "Progressive decompression..." << std::endl;
+            int lsize = N * level_progressive, bsize = bitgroup.size();
 
             //load non-progressive levels
             std::vector<uchar const *> data_lb(lsize * bsize);
@@ -178,69 +228,23 @@ namespace SZ3 {
                     }
             }
 
-            // {   // verify bdelta
-            //     assert(level_progressive > 0);
-            //     assert(bdelta.size() == lsize);
-            //     assert(bsum.size() == lsize);
-            //     bool legal = true;
-            //     for (size_t i = 0; i < lsize; i++){
-            //         if(bsum[i] + bdelta[i] > bsize){
-            //             legal = false;
-            //             std::cout << "[Error] bsum + bdelta > bsize" << std::endl;
-            //             break;
-            //         }
-            //     }
-            //     assert(legal);
-            // }
-            {   // verification
-                double psnr, nrmse, max_err, range;
-                verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-            }
-             
-            std::vector<size_t> throwawayBits = strategy(levelSize, 500);
-            // for(int l = lsize - 1; l >= 0; l--)
-            // {
-            //     bdelta[l] = bsize;
-            // }
-            for(int l = 0; l < lsize; l++){
-                bdelta[l] = std::max(std::min(bsize, (int)(bsize - throwawayBits[l])), 0);
-            }   
             if(level_progressive > 0)
             {
-                decompress_progressive(dec_data, data, 
+                decompress_progressive(dec_data,
                                     bsum, bdelta,
                                     bsize, lsize,
                                     data_lb, size_lb,
                                     levelSize, level_cnt, false);
-            //                         for(int l = 0; l < lsize; l++){
-            //     bdelta[l] = std::max(std::min(bsize, 32 * ((l + 1) % 2)), 0);
-            // }    
-                // decompress_progressive(dec_data, data, 
-                //                     bsum, bdelta,
-                //                     bsize, lsize,
-                //                     data_lb, size_lb,
-                //                     levelSize, level_cnt, true);
-                // bdelta[0] = 0;
-                // bdelta[1] = 16;
-                // decompress_progressive(dec_data, data, 
-                //                     bsum, bdelta,
-                //                     bsize, lsize,
-                //                     data_lb, size_lb,
-                //                     levelSize, level_cnt, true);
-                // decompress_progressive(dec_data, data, 
-                //                     bsum, bdelta,
-                //                     bsize, lsize,
-                //                     data_lb, size_lb,
-                //                     levelSize, level_cnt, true);
             }
-            
-            return dec_data;
+            quantizer.postdecompress_data();
+            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+
+            return compressed_size;
             //decompress_progressive(dec_data, cmp_data_pos, prog_data_pos, lossless_size,
             //                    lossless_id, data, bsum, bdelta);
         }
 
         T *decompress_progressive(T* dec_data, 
-                                T *data, 
                                 std::vector<int>& bsum,
                                 const std::vector<int>& bdelta,
                                 const int bsize,
@@ -264,7 +268,7 @@ namespace SZ3 {
                 printf("\n");
             }
             Timer timer(true);
-
+            timer.start();
             bool retrive = true;
             {   // retrive = if elements in bsum are all zeros
                 for(auto i : bsum){
@@ -273,14 +277,14 @@ namespace SZ3 {
                         break;
                     }
                 }
-                if(retrive && level_progressive != levels){
-                    for (uint l = level_progressive; l > 0; l--) {
-                        for (const auto &direction: directions) {
-                            block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
-                                                interpolators[interpolator_id], direction, 1U << (l - 1), true);
-                        }
-                    }
-                }
+                // if(retrive && level_progressive != levels){
+                //     for (uint l = level_progressive; l > 0; l--) {
+                //         for (const auto &direction: directions) {
+                //             block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
+                //                                 interpolators[interpolator_id], direction, 1U << (l - 1), true);
+                //         }
+                //     }
+                // }
             }
 
             ska::unordered_map<std::string, double> result;
@@ -341,52 +345,69 @@ namespace SZ3 {
                 }
             }
             level_cnt = level_cnt_temp;
-            {   // verification
-                double psnr, nrmse, max_err, range, l2_no_propo = 0;
-                verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
-                printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
-            }
+            // {   // verification
+            //     double psnr, nrmse, max_err, range, l2_no_propo = 0;
+            //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
+            //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+            // }
+            std::cout << "decompress time = " << timer.stop() << std::endl;
             return dec_data;
+        }
+
+        uchar *compress(T *data, size_t & compressed_size) {
+
+            uchar *lossless_data = new uchar[size_t((num_elements < 1000000 ? 100 : 2.0) * num_elements) * sizeof(T)]; //?
+            uchar * lossless_data_pos = lossless_data;
+            compressed_size = compress(data, lossless_data_pos);
+            lossless_data_pos += compressed_size;
+                
+
+            std::vector<T> err_data{error};
+            // uchar *lossless_data_new = new uchar[size_t((num_elements < 1000000 ? 100 : 1.5) * num_elements) * sizeof(T)]; //?
+            std::vector<T> ebs = {1e-2, 1e-4, 1e-6};
+            for(auto eb : ebs){
+                quantizer.set_eb(eb);
+                    // memcpy(lossless_data_pos, error.data(), num_elements * sizeof(T));
+                memcpy(data, error.data(), num_elements * sizeof(T));
+                // init();
+                size_t delta_compressed_data = compress(data, lossless_data_pos);
+                compressed_size += delta_compressed_data;
+                lossless_data_pos += delta_compressed_data;
+            }
+            // init();
+            // int lsize = N * level_progressive, bsize = bitgroup.size();
+            // std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+            // // size_t compressed_size = 0;
+            // T *dec_data = decompress(lossless_data_pos, bsum, bdelta, compressed_size);
+            // T b = dec_data[3780504];
+
+            // {   // verification
+            //     double psnr, nrmse, max_err, range;
+            //     verify(err_data.data(), dec_data, num_elements, psnr, nrmse, max_err, range);
+            // }
+
+            // compress(data, lossless_data_pos);
+            return lossless_data;
         }
         
         // compress given the error bound
-        uchar *compress(T *data, std::vector<size_t> &lossless_size) {
+        size_t compress(T *data, uchar* lossless_data) {
 
-            {
-                std::vector<size_t> levelSize{1, 5, 10};
-                strategy(levelSize, 10);
-
-                int qu = ((int32_t) 7 + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
-                int dequ = (((uint32_t) qu) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
-                std::cout << dequ << std::endl;
-
-            }
             // {
-            //     std::vector <int> bins = {0, 1, 1, 1, 0, 1, 1, 1, 
-            //                             0, 1, 1, 1, 0, 1, 1, 1};
-            //     // testing arithmetic encoder.
-            //     encoder.preprocess_encode(bins, 2);
-            //     uchar * save_ptr = new uchar [1000];
-            //     uchar * save_ptr_pos = save_ptr;
-            //     encoder.save(save_ptr_pos);
-            //     encoder.encode(bins, save_ptr_pos);
-            //     encoder.postprocess_encode();
-            //     size_t sz = save_ptr_pos - save_ptr;
-            //     {
-            //         // decode
-            //         size_t remaining_length = 0;
-            //         uchar const *save_ptr_pos = save_ptr;
-            //         encoder.load(save_ptr_pos, remaining_length);
-            //         quant_inds = encoder.decode(save_ptr_pos, 16);
-            //         encoder.postprocess_decode();
-            //     }
-            //     delete []save_ptr;
+            //     std::vector<size_t> levelSize{1, 5, 10};
+            //     strategy(levelSize, 10);
+
+            //     int qu = ((int32_t) 7 + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+            //     int dequ = (((uint32_t) qu) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+            //     std::cout << dequ << std::endl;
+
             // }
 
 
             Timer timer(true);
 
             quant_inds.reserve(num_elements);
+            error.resize(num_elements, 0);
             size_t interp_compressed_size = 0;
             size_t quant_inds_total = 0;
 
@@ -406,8 +427,15 @@ namespace SZ3 {
 //            quantizer.set_eb(eb * eb_ratio);
             l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
 
-            uchar *lossless_data = new uchar[size_t((num_elements < 1000000 ? 100 : 1.2) * num_elements) * sizeof(T)]; //?
             uchar *lossless_data_pos = lossless_data;
+
+            // save space for lossless_size;
+            size_t estimated_lossless_size_size = 1 + N * level_progressive * bitgroup.size() + 1;
+            std::vector<size_t> lossless_size;
+            lossless_size.reserve(estimated_lossless_size_size);
+            write(estimated_lossless_size_size, lossless_data_pos);
+            uchar *lossless_size_pos = lossless_data_pos;
+            lossless_data_pos += estimated_lossless_size_size * sizeof(size_t);
 
             write(global_dimensions.data(), N, lossless_data_pos);
             write(interp_dim_limit, lossless_data_pos);
@@ -419,44 +447,44 @@ namespace SZ3 {
 
             uchar *error_mse_pos = lossless_data_pos;
            
-            lossless_data_pos += l2_diff.size() * sizeof(T);
+            // lossless_data_pos += l2_diff.size() * sizeof(T);
             lossless_size.push_back(lossless_data_pos - lossless_data);
 
-            for (uint level = levels; level > level_progressive; level--) {
-                timer.start();
+//             for (uint level = levels; level > level_progressive; level--) {
+//                 timer.start();
 
-//                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
-                uint stride = 1U << (level - 1);
+// //                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
+//                 uint stride = 1U << (level - 1);
 
-                if (level == levels) {
-                    quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
-                }
-                auto block_range = std::make_shared<
-                        SZ3::multi_dimensional_range<T, N>>(data, std::begin(global_dimensions),
-                                                           std::end(global_dimensions),
-                                                           interp_dim_limit * stride, 0);
+//                 if (level == levels) {
+//                     quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
+//                 }
+//                 auto block_range = std::make_shared<
+//                         SZ3::multi_dimensional_range<T, N>>(data, std::begin(global_dimensions),
+//                                                            std::end(global_dimensions),
+//                                                            interp_dim_limit * stride, 0);
 
-                for (auto block = block_range->begin(); block != block_range->end(); ++block) {
-                    auto end_idx = block.get_global_index();
-                    for (int i = 0; i < N; i++) {
-                        end_idx[i] += interp_dim_limit * stride;
-                        if (end_idx[i] > global_dimensions[i] - 1) {
-                            end_idx[i] = global_dimensions[i] - 1;
-                        }
-                    }
-                    for (const auto &direction: directions) {
-                        block_interpolation(data, data, block.get_global_index(), end_idx, &SZProgressiveMQuant::quantize,
-                                            interpolators[interpolator_id], direction, stride, true);
-                    }
-                }
+//                 for (auto block = block_range->begin(); block != block_range->end(); ++block) {
+//                     auto end_idx = block.get_global_index();
+//                     for (int i = 0; i < N; i++) {
+//                         end_idx[i] += interp_dim_limit * stride;
+//                         if (end_idx[i] > global_dimensions[i] - 1) {
+//                             end_idx[i] = global_dimensions[i] - 1;
+//                         }
+//                     }
+//                     for (const auto &direction: directions) {
+//                         block_interpolation(data, data, block.get_global_index(), end_idx, &SZProgressiveMQuant::quantize,
+//                                             interpolators[interpolator_id], direction, stride, true);
+//                     }
+//                 }
 
-                auto quant_size = quant_inds.size();
-                quant_inds_total += quant_size;
-                write(quant_size, levelSize_pos);
-                auto size = encode_lossless(lossless_data_pos, lossless_size);
-                printf("level = %d , quant size = %lu , lossless size = %lu, time=%.3f\n", level, quant_size, size, timer.stop());
+//                 auto quant_size = quant_inds.size();
+//                 quant_inds_total += quant_size;
+//                 write(quant_size, levelSize_pos);
+//                 auto size = encode_lossless(lossless_data_pos, lossless_size);
+//                 printf("level = %d , quant size = %lu , lossless size = %lu, time=%.3f\n", level, quant_size, size, timer.stop());
 
-            }
+//             }
 
             // T *partial_data = new T[num_elements]; 
             // memcpy(partial_data, data, num_elements * sizeof(T));
@@ -469,9 +497,9 @@ namespace SZ3 {
             //                             interpolators[interpolator_id], direction, 1U << (l - 1), true);
             //     }
             // }
+            timer.start();
             
             for (uint level = level_progressive; level > 0; level--) {
-                timer.start();
 
 //                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
                 uint stride = 1U << (level - 1);
@@ -486,17 +514,18 @@ namespace SZ3 {
                     quant_inds_total += quant_size;
                     write(quant_size, levelSize_pos);
                     auto size = encode_lossless_bitplane((level_progressive - level) * N + d, lossless_data_pos, lossless_size, eb);
-                    printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
-                           level, d, quant_size, size, timer.stop());
+                    // printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
+                    //        level, d, quant_size, size, timer.stop());
 
                 }
             }
 
 //            quant_inds.clear();
             std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
+            std::cout << "compress time = " << timer.stop() << std::endl;
             assert(quant_inds_total >= num_elements);
 
-            write(l2_diff.data(), l2_diff.size(), error_mse_pos);
+            // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
 
             uchar *buffer = new uchar[quantizer.get_unpred_size() * (sizeof(T) + sizeof(size_t)) + 40];
             uchar *buffer_pos = buffer;
@@ -507,6 +536,65 @@ namespace SZ3 {
             lossless_data_pos += size;
             lossless_size.push_back(size);
 
+            assert(lossless_size.size() == estimated_lossless_size_size);
+            write(lossless_size.data(), lossless_size.size(), lossless_size_pos);
+            // ----- 
+            // quantizer.set_eb(1e-5);
+            // compress_progressive(error.data(), lossless_size, lossless_data);
+            quantizer.postcompress_data();
+            return std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
+
+        }
+
+
+        uchar *compress_residuel(T *data, std::vector<size_t> &lossless_size, uchar* lossless_data){
+            Timer timer(true);
+            size_t interp_compressed_size = 0;
+            size_t quant_inds_total = 0;
+
+            size_t totalSize = 0;
+            for(auto sz : lossless_size) {
+                totalSize += sz;
+            }
+
+            uchar *lossless_data_pos = lossless_data;
+            lossless_data_pos += totalSize;
+
+            T eb = quantizer.get_eb();
+            for (uint level = level_progressive; level > 0; level--) {
+                timer.start();
+
+//                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
+                uint stride = 1U << (level - 1);
+                if (level == levels) {
+                    quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
+                }
+                for (int d = 0; d < N; d++) {
+                    block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::quantize,
+                                        interpolators[interpolator_id], directions[d], stride, true);
+
+                    auto quant_size = quant_inds.size();
+                    quant_inds_total += quant_size;
+                    // write(quant_size, levelSize_pos);
+                    auto size = encode_lossless_bitplane((level_progressive - level) * N + d, lossless_data_pos, lossless_size, eb);
+                    printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
+                           level, d, quant_size, size, timer.stop());
+
+                }
+            }
+            std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
+            assert(quant_inds_total >= num_elements);
+
+            // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
+
+            uchar *buffer = new uchar[quantizer.get_unpred_size() * (sizeof(T) + sizeof(size_t)) + 40];
+            uchar *buffer_pos = buffer;
+            quantizer.save(buffer_pos);
+            size_t size = lossless.compress(buffer, buffer_pos - buffer, lossless_data_pos);
+            delete[] buffer;
+            
+            lossless_data_pos += size;
+            lossless_size.push_back(size);
             return lossless_data;
         }
 
@@ -561,13 +649,13 @@ namespace SZ3 {
             // length = lossless.decompress(data_pos, length, compressed_data, rSize);
 
             //
-            uchar *compressed_data = new uchar[length];
-            memcpy(compressed_data, data_pos, length);
-            std::vector<int> quant_ind_truncated;
-            uchar const *compressed_data_pos = compressed_data;
-            encoder.load(compressed_data_pos, length);
-            quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
-            encoder.postprocess_decode();
+            // uchar *compressed_data = new uchar[length];
+            // memcpy(compressed_data, data_pos, length);
+            // std::vector<int> quant_ind_truncated;
+            // uchar const *compressed_data_pos = compressed_data;
+            // encoder.load(compressed_data_pos, length);
+            // quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
+            // encoder.postprocess_decode();
 
 
             // artimetic ends
@@ -575,30 +663,30 @@ namespace SZ3 {
             
             // huffman && zstd
             // ---------------
-            // uchar * compressed_data = nullptr;
-            // if (quant_size < 128 && bitgroup[bg] == 1) {
-            //     compressed_data = new uchar[length];
-            //     memcpy(compressed_data, data_pos, length);
-            // } else {
-            //     size_t rSize = lossless.getFrameConteneSize(data_pos, length);
-            //     compressed_data = new uchar[rSize];
-            //     length = lossless.decompress(data_pos, length, compressed_data, rSize);
-            // }
-            // uchar const *compressed_data_pos = compressed_data;
+            uchar * compressed_data = nullptr;
+            if (quant_size < 128 && bitgroup[bg] == 1) {
+                compressed_data = new uchar[length];
+                memcpy(compressed_data, data_pos, length);
+            } else {
+                size_t rSize = lossless.getFrameConteneSize(data_pos, length);
+                compressed_data = new uchar[rSize];
+                length = lossless.decompress(data_pos, length, compressed_data, rSize);
+            }
+            uchar const *compressed_data_pos = compressed_data;
 
-            // // size_t quant_size;
-            // // read(quant_size, compressed_data_pos, length);
+            // size_t quant_size;
+            // read(quant_size, compressed_data_pos, length);
 
-            // std::vector<int> quant_ind_truncated;
-            // if (bitgroup[bg] == 1) {
-            //     quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
-            // } else if (bitgroup[bg] == 2) {
-            //     quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
-            // } else {
-            //     encoder.load(compressed_data_pos, length);
-            //     quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
-            //     encoder.postprocess_decode();
-            // }
+            std::vector<int> quant_ind_truncated;
+            if (bitgroup[bg] == 1) {
+                quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
+            } else if (bitgroup[bg] == 2) {
+                quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
+            } else {
+                encoder.load(compressed_data_pos, length);
+                quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
+                encoder.postprocess_decode();
+            }
 
             // lossless.postdecompress_data(compressed_data);
             // huffman && zstd ends
@@ -641,10 +729,10 @@ namespace SZ3 {
             {   // calc the total l2 error
                 for (size_t i = 0; i < qsize; i++) {
                     if(i < error.size()) {
-                        l2_error_base += error[i] * error[i];
+                        // l2_error_base += error[i] * error[i];
                     }
                 }
-                printf("l2 = %.10G \n", l2_error_base);
+                // printf("l2 = %.10G \n", l2_error_base);
             }
             size_t total_size = 0;
             int shift = 0;
@@ -659,8 +747,8 @@ namespace SZ3 {
                     quant_inds[i] >>= bitgroup[b];
                     int qu = (((uint32_t) quants[i] << shift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
                     if (i < error.size()) {
-                        error[i] += qu * 2.0 * eb;
-                        l2_error += error[i] * error[i];
+                        // error[i] += qu * 2.0 * eb;
+                        // l2_error += error[i] * error[i];
                     }
                 }
                 l2_diff[lid * bsize + b] = l2_error - ((b == bsize - 1) ? l2_error_base : l2_diff[lid * bsize + b + 1]);
@@ -670,16 +758,16 @@ namespace SZ3 {
 
                 // ---------------
                 // arithemetic
-                encoder.preprocess_encode(quants, 2);
-                encoder.save(buffer_pos);
-                encoder.encode(quants, buffer_pos);
-                encoder.postprocess_encode();
+                // encoder.preprocess_encode(quants, 2);
+                // encoder.save(buffer_pos);
+                // encoder.encode(quants, buffer_pos);
+                // encoder.postprocess_encode();
                 
-                memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
-                size_t size = buffer_pos - buffer;
-                total_size += size;
-                lossless_data_pos += size;
-                lossless_size.push_back(size);
+                // memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
+                // size_t size = buffer_pos - buffer;
+                // total_size += size;
+                // lossless_data_pos += size;
+                // lossless_size.push_back(size);
                 // zstd
                 // size_t size = lossless.compress(
                 //             buffer, buffer_pos - buffer, lossless_data_pos);
@@ -692,34 +780,34 @@ namespace SZ3 {
 
                 // ---------------
                 // huffman && zstd
-    //             if (bitgroup[b] == 1) {
-    //                 encode_int_1bit(quants, buffer_pos);
-    //             } else if (bitgroup[b] == 2) {
-    //                 encode_int_2bits(quants, buffer_pos);
-    //             } else {
-    //                 //TODO huffman tree is huge if using large radius on early levels
-    //                 // set different radius for each level
-    //                 encoder.preprocess_encode(quants, 0);
-    //                 encoder.save(buffer_pos);
-    //                 encoder.encode(quants, buffer_pos);
-    //                 encoder.postprocess_encode();
-    //             }
+                if (bitgroup[b] == 1) {
+                    encode_int_1bit(quants, buffer_pos);
+                } else if (bitgroup[b] == 2) {
+                    encode_int_2bits(quants, buffer_pos);
+                } else {
+                    //TODO huffman tree is huge if using large radius on early levels
+                    // set different radius for each level
+                    encoder.preprocess_encode(quants, 0);
+                    encoder.save(buffer_pos);
+                    encoder.encode(quants, buffer_pos);
+                    encoder.postprocess_encode();
+                }
 
-    //             if(qsize < 128 && bitgroup[b] == 1) {
-    //                 memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
-    //                 size_t size = buffer_pos - buffer;
-    // //                printf("%d %lu, ", bitgroup[b], size);
-    //                 total_size += size;
-    //                 lossless_data_pos += size;
-    //                 lossless_size.push_back(size);
-    //             } else {
-    //                 size_t size = lossless.compress(
-    //                         buffer, buffer_pos - buffer, lossless_data_pos);
-    // //                printf("%d %lu, ", bitgroup[b], size);
-    //                 total_size += size;
-    //                 lossless_data_pos += size;
-    //                 lossless_size.push_back(size);
-    //             }
+                if(qsize < 128 && bitgroup[b] == 1) {
+                    memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
+                    size_t size = buffer_pos - buffer;
+    //                printf("%d %lu, ", bitgroup[b], size);
+                    total_size += size;
+                    lossless_data_pos += size;
+                    lossless_size.push_back(size);
+                } else {
+                    size_t size = lossless.compress(
+                            buffer, buffer_pos - buffer, lossless_data_pos);
+    //                printf("%d %lu, ", bitgroup[b], size);
+                    total_size += size;
+                    lossless_data_pos += size;
+                    lossless_size.push_back(size);
+                }
                 // huffman && zstd ends
                 // ---------------
             }
@@ -727,7 +815,7 @@ namespace SZ3 {
             
             delete[]buffer;
             quant_inds.clear();
-            error.clear();
+            // error.clear();
 
             return total_size;
         }
@@ -787,7 +875,7 @@ namespace SZ3 {
             lossless_size.push_back(size);
 
             quant_inds.clear();
-            error.clear();
+            // error.clear();
 
             
             return size;
@@ -796,7 +884,9 @@ namespace SZ3 {
         inline void quantize(size_t idx, T &data, T pred) {
             T data0 = data;
             quant_inds.push_back(quantizer.quantize_and_overwrite(idx, data, pred));
-            error.push_back(data0 - data);
+            // error.push_back(data0 - data);
+            error[idx] = data0 - data;
+
         }
 
         inline void recover(size_t idx, T &d, T pred) {
@@ -962,42 +1052,6 @@ namespace SZ3 {
             throwawayBits.resize(sizelb, 0);
 
             int BITGROUP_SEARCHING_LIMIT = 30;
-            // std::vector<long long> dp(limit + 1, -1);
-            // dp[0] = 0;
-
-            // for (int i = 0; i < N * level_progressive; i++) {
-            //     // 
-            //     for (int y_i = 0; y_i <= 30; y_i++) {
-            //         int value = y_i * levelSize[i];
-            //         int cost = (1 << y_i);  
-                    
-            //         for (int j = limit; j >= cost; j--) {
-            //             if (dp[j - cost] != -1 && dp[j - cost] + value > dp[j]) {
-            //                 dp[j] = dp[j - cost] + value;
-            //             }
-            //         }
-            //     }
-            // }
-            // int best_j = 0;
-            // for (int j = 1; j <= limit; j++) {
-            //     if (dp[j] > dp[best_j]) {
-            //         best_j = j;
-            //     }
-            // }
-
-            // for (int i = N * level_progressive - 1; i >= 0; i--) {
-            //     for (int y_i = 30; y_i >= 0; y_i--) {
-            //         int cost = (1 << y_i);
-            //         int value = y_i * levelSize[i];
-            //         if (best_j >= cost && dp[best_j - cost] != -1 && dp[best_j - cost] + value == dp[best_j]) {
-            //             throwawayBits[i] = y_i;
-            //             best_j -= cost;
-            //             break;
-            //         }
-            //     }
-            // }
-            // std::vector<std::vector<int>> last_dp(E + 1, vector<int>(l, -1)); 
-
             std::vector<int> NonZeroMap(sizelb, -1);
             size_t NewSizelb = sizelb;
             for(size_t i = 0; i < sizelb; i++){
@@ -1057,38 +1111,14 @@ namespace SZ3 {
                     }
                 }
             }
-            // 用于记录每个状态的 y 值
-
-            // 遍历每个物品
-            // for (int i = 0; i < N * level_progressive; i++) {
-            // // 遍历可能的 y_i 值
-            // for (int y_i = 30; y_i >= 0; y_i--) { // 从高到低遍历以防覆盖
-            //     int cost = (1 << y_i); // 2^y_i
-            //     int value = y_i * levelSize[i]; // y_i * N[i]
-                
-            //     // 倒序遍历 dp 数组
-            //     for (int j = limit; j >= cost; j--) {
-            //         if (dp[j - cost] + value > dp[j]) {
-            //             dp[j] = dp[j - cost] + value; // 更新最大收益
-            //             throwawayBits[i] = y_i; // 记录当前的 y 值
-            //         }
-            //     }
-            // }
-            // }
-
-            // // 找到最大收益对应的 j 值
-            // long long max_profit = 0;
-            // int best_j = 0;
-            // for (int j = 1; j <= limit; j++) {
-            // if (dp[j] > max_profit) {
-            //     max_profit = dp[j];
-            //     best_j = j;
-            // }
-            // }
             return throwawayBits;
         }
 
-
+        void init(){
+            quant_cnt = 0;
+            quant_inds.clear();
+            error.clear();
+        }
     };
 };
 

@@ -6,7 +6,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/debug/test/sz_pinterp_mquant_v3", // 可执行文件路径
-            "args": ["${workspaceFolder}/debug/Uf48.bin.dat", "-3", "100","500","500","1e-3","0","0","9","8","0",], // 传递给程序的命令行参数
+            "args": ["${workspaceFolder}/debug/Uf48.bin.dat", "-3", "100","500","500","1.0","0","0","9","8","0",], // 传递给程序的命令行参数
             "cwd": "${workspaceFolder}",
             // "miDebuggerPath": "/usr/bin/lldb",  // 明确指定 LLDB 路径
             "preLaunchTask": "build", // 调试前自动执行的任务（如编译任务）

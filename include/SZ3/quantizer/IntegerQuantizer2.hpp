@@ -94,6 +94,9 @@ namespace SZ3 {
         }
 
         void recover_from_delta(size_t idx, T &dest, T delta) {
+            if(idx == 3780504) {
+                int a = 0;
+            }
             if (!isunpred[idx]) {
                 dest += delta;
             }
@@ -172,6 +175,10 @@ namespace SZ3 {
 
         }
 
+        bool topINDEXofstack(size_t idx){
+            return !unpred_idx.empty() && unpred_idx.back() == idx;
+        }
+
 
         void setunpred(T *data) {
             for (size_t i = 0; i < num; i++) {
@@ -188,13 +195,28 @@ namespace SZ3 {
             return unpred_idx.size();
         }
 
-        virtual void postcompress_data() {};
+        virtual void postcompress_data() {
+            unpred_idx.clear();
+            unpred_map.clear();
+            unpred_val.clear();
+            isunpred.clear();
+        };
 
-        virtual void postdecompress_data() {};
+        virtual void postdecompress_data() {
+            unpred_idx.clear();
+            unpred_map.clear();
+            unpred_val.clear();
+            isunpred.clear();
+            isunpred.clear();
+        };
 
-        virtual void precompress_data() {};
+        virtual void precompress_data() {
+            
+        };
 
-        virtual void predecompress_data() {};
+        virtual void predecompress_data() {
+            
+        };
 
     private:
         T error_bound;
