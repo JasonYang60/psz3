@@ -144,7 +144,7 @@ namespace SZ3 {
 
         printf("[Verify]L2 error = %.10G\n", l2_err);
         printf("[Verify]Min=%.20G, Max=%.20G, range=%.20G\n", Min, Max, range);
-        printf("[Verify]Max absolute error = %.2G, idx = %d\n", max_err, max_err_idx);
+        printf("[Verify]Max absolute error = %.2G, idx = %d\n", max_err, (int)max_err_idx);
 //        printf("Max relative error = %.2G\n", max_err / (Max - Min));
 //        printf("Max pw relative error = %.2G\n", maxpw_relerr);
         printf("[Verify]PSNR = %f, NRMSE= %.10G\n", psnr, nrmse);
