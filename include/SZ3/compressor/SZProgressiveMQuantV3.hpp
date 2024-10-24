@@ -30,15 +30,18 @@ namespace SZ3 {
                             int interpolator,
                             int direction_id_,
                             size_t interp_dim_limit,
-                            int level_progressive_,
-                            size_t block_size_,
-                            int level_fill_) :
+                            // int level_progressive_,
+                            int layers_,
+                            size_t block_size_
+                            //int level_fill_
+                            ) :
                 quantizer(quantizer), encoder(encoder), lossless(lossless),
                 global_dimensions(dims),
                 interpolators({"linear", "cubic"}),
                 interpolator_id(interpolator),
                 interp_dim_limit(interp_dim_limit),
                 // level_progressive(level_progressive_),
+                layers(layers_),
                 block_size(block_size_)
 //                level_fill(level_fill_)
         {
@@ -70,51 +73,115 @@ namespace SZ3 {
 
             level_progressive = levels;
 
+            // getRange(data);
+            switch (layers)
+            {
+            case 1:
+                // ebs = {(T)(range * 1e-6)};
+                ebs = {(T)(1e-6)};
+
+                break;
+            case 2:
+                // ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
+                ebs = {(T)(1e-3), (T)(1e-6)};
+                break;
+            case 3:
+                // ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
+                ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
+                break;
+            default:
+                // ebs = {(T)(range * 1e-6)};
+                ebs = {(T)(1e-6)};
+                std::cout << "[warning] param 'layers' too large." << std::endl;
+                break;
+            }
         }
 
-        T *decompress(uchar const *lossless_data, T *data) {
+        T *decompress(uchar const *lossless_data, T *data, const T targetErrorBound) {
+            int lsize = N * level_progressive, bsize = bitgroup.size();
+            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+
+            std::vector<size_t> levelSize(lsize, 0);
+            {
+                uchar const *buffer = lossless_data;
+                //load lossless_size
+                size_t lossless_size_size = 0;
+                read(lossless_size_size, buffer);
+                std::vector<size_t> lossless_size(lossless_size_size, 0);
+                read(lossless_size.data(), lossless_size_size, buffer);
+                size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
+
+                //load dim && l2_diff
+                size_t buffer_len = lossless_size[0];
+                retrieved_size += buffer_len;
+                buffer_len -= (lossless_size_size + 1) * sizeof(size_t);
+                // uchar const *cmp_data_pos = lossless_data;
+                read(global_dimensions.data(), N, buffer, buffer_len);
+                num_elements = std::accumulate(global_dimensions.begin(), global_dimensions.end(), (size_t) 1, std::multiplies<>());
+                read(interp_dim_limit, buffer, buffer_len);
+                size_t level_cnt = 0;
+                read(levelSize.data(), levelSize.size(), buffer, buffer_len);
+            }
             // size_t total_compressed_size;
             // uchar * compressed = compress(data.get(), total_compressed_size);
+            const int progressive_layer_limit = 4096;
+            int progressive_layer = progressive_layer_limit;
+            std::vector<size_t> throwawayBits(lsize, 0);
+            for(int i = 0; i < ebs.size(); i++){
+                if(targetErrorBound >= ebs[i]){
+                    throwawayBits = strategy(levelSize, (int)floor(targetErrorBound / ebs[i]) - 1);
+                    progressive_layer = i;
+                    break;
+                }
+            }
 
 
-            int lsize = N * level_progressive, bsize = bitgroup.size();
-            std::vector<size_t> levelSize(lsize, 0);
-            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+            if(progressive_layer == progressive_layer_limit) {
+                std::cout << "[warning]target error bound should larger than 1e-6 * range;" << std::endl;
+            }
+
             size_t compressed_size = 0;
             uchar const * lossless_data_pos = lossless_data;
-            T *dec_data = new T[num_elements]; // exceed num_elements?
-            T *residuel_data = new T[num_elements];
+            T *dec_data = new T[num_elements];
+            if(progressive_layer == 0){
+                for(int i = 0; i < lsize; i++){
+                    bdelta[i] = bsize - throwawayBits[i];
+                }
+            }
             compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize);
             lossless_data_pos += compressed_size;
             {   // verification
                 double psnr, nrmse, max_err, range;
                 verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
             }
+            if(progressive_layer > 0) {
+                T *residuel_data = new T[num_elements];
+                for (int layer = 1; layer < ebs.size(); layer++){
+                    if(layer > progressive_layer){
+                        break;
+                    }
+                    bsum.clear();
+                    bsum.resize(lsize, 0);
+                    bdelta.clear();
+                    bdelta.resize(lsize, bsize);
+                    if(layer == progressive_layer){
+                        for(int j = 0; j < lsize; j++){
+                            bdelta[j] = bsize - throwawayBits[j];
+                        }
+                    }
+                    compressed_size = decompress(lossless_data_pos, residuel_data, bsum, bdelta, levelSize);
+                    lossless_data_pos += compressed_size;
 
-            for (int i = 0; i < 0; i++){
-                bsum.clear();
-                bsum.resize(lsize, 0);
-                // if (i == 1) {
-                //     std::vector<size_t> throwawayBits = strategy(levelSize, 10);
-                //     for(int j = 0; j < lsize; j++){
-                //         bdelta[j] = bsize - throwawayBits[j];
-                //     }
-                // }
-                // if (i == 2) {
-                //     std::vector<size_t> throwawayBits = strategy(levelSize, 1000);
-                //     for(int j = 0; j < lsize; j++){
-                //         bdelta[j] = bsize - throwawayBits[j];
-                //     }
-                // }
-                compressed_size = decompress(lossless_data_pos, residuel_data, bsum, bdelta, levelSize);
-                lossless_data_pos += compressed_size;
-
-                for (size_t i = 0; i < num_elements; i++){
-                    dec_data[i] += residuel_data[i];
-                }
-                {   // verification
-                    double psnr, nrmse, max_err, range;
-                    verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+                    for (size_t i = 0; i < num_elements; i++){
+                        dec_data[i] += residuel_data[i];
+                    }
+                    {   // verification
+                        double psnr, nrmse, max_err, range;
+                        verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+                    }
+                    if(layer == progressive_layer){
+                        break;
+                    }
                 }
             }
             return dec_data;
@@ -148,6 +215,7 @@ namespace SZ3 {
             read(interp_dim_limit, buffer, buffer_len);
             size_t level_cnt = 0;
             read(levelSize.data(), levelSize.size(), buffer, buffer_len);
+
             l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
             // read(l2_diff.data(), l2_diff.size(), buffer, buffer_len);
 
@@ -167,60 +235,14 @@ namespace SZ3 {
                 uchar const * dcmpDataRef = dcmpData;
                 quantizer.load(dcmpDataRef, dcmpSize);
                 delete []dcmpData;
-                printf("------[Log] Loading Unpredictable data...\n");
-                printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+                printf("[Log] Loading Unpredictable data...\n");
+                printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
             }
             //load non-progressive levels
             int lossless_id = 1;        // ???
             lossless_data += lossless_size[0];
 
-
-            // for (uint level = levels; level > level_progressive; level--) {
-            //     timer.start();
-            //     size_t stride = 1U << (level - 1);
-
-            //     lossless_decode(lossless_data, lossless_size, lossless_id++, levelSize[level_cnt++]);
-
-            //     if (level == levels) {
-            //         *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
-            //     }
-
-            //     auto block_range = std::make_shared<
-            //             SZ3::multi_dimensional_range<T, N>>(dec_data,
-            //                                                std::begin(global_dimensions), std::end(global_dimensions),
-            //                                                stride * interp_dim_limit, 0);
-            //     for (auto block = block_range->begin(); block != block_range->end(); ++block) {
-            //         auto end_idx = block.get_global_index();
-            //         for (int i = 0; i < N; i++) {
-            //             end_idx[i] += stride * interp_dim_limit;
-            //             if (end_idx[i] > global_dimensions[i] - 1) {
-            //                 end_idx[i] = global_dimensions[i] - 1;
-            //             }
-            //         }
-            //         for (const auto &direction: directions) {
-            //             block_interpolation(dec_data, dec_data, block.get_global_index(), end_idx, &SZProgressiveMQuant::recover,
-            //                                 interpolators[interpolator_id], direction, stride, true);
-            //         }
-            //     }
-            //     quantizer.postdecompress_data();
-            //     std::cout << "Level = " << level << " , quant size = " << quant_inds.size() << ", Time = " << timer.stop() << std::endl;
-            // }
-
-            // if (level_progressive == levels) {
-            //     *dec_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
-            // }
-            // for (uint level = level_progressive; level > 0; level--) {
-
-            //     for (const auto &direction: directions) {
-            //         block_interpolation(dec_data, dec_data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
-            //                             interpolators[interpolator_id], direction, 1U << (level - 1), true);
-            //     }
-            // }
-            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
-
             uchar const *prog_data_pos = lossless_data;
-
-            
 
             std::cout << "Progressive decompression..." << std::endl;
             int lsize = N * level_progressive, bsize = bitgroup.size();
@@ -365,38 +387,27 @@ namespace SZ3 {
         }
 
         uchar *compress(T *data, size_t & compressed_size) {
-
+            
             uchar *lossless_data = new uchar[size_t((num_elements < 1000000 ? 100 : 2.0) * num_elements) * sizeof(T)]; //?
             uchar * lossless_data_pos = lossless_data;
-            compressed_size = compress(data, lossless_data_pos);
-            lossless_data_pos += compressed_size;
-                
-
-            std::vector<T> err_data{error};
+            
+            
+            // std::vector<T> err_data{error};
             // uchar *lossless_data_new = new uchar[size_t((num_elements < 1000000 ? 100 : 1.5) * num_elements) * sizeof(T)]; //?
-            std::vector<T> ebs = {};
+            bool isFirst = true;
             for(auto eb : ebs){
                 quantizer.set_eb(eb);
-                    // memcpy(lossless_data_pos, error.data(), num_elements * sizeof(T));
-                memcpy(data, error.data(), num_elements * sizeof(T));
-                // init();
-                size_t delta_compressed_data = compress(data, lossless_data_pos);
-                compressed_size += delta_compressed_data;
-                lossless_data_pos += delta_compressed_data;
+                if(isFirst){
+                    isFirst = false;
+                    compressed_size = compress(data, lossless_data_pos);
+                    lossless_data_pos += compressed_size;
+                } else {
+                    memcpy(data, error.data(), num_elements * sizeof(T));
+                    size_t delta_compressed_data = compress(data, lossless_data_pos);
+                    compressed_size += delta_compressed_data;
+                    lossless_data_pos += delta_compressed_data;
+                }
             }
-            // init();
-            // int lsize = N * level_progressive, bsize = bitgroup.size();
-            // std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
-            // // size_t compressed_size = 0;
-            // T *dec_data = decompress(lossless_data_pos, bsum, bdelta, compressed_size);
-            // T b = dec_data[3780504];
-
-            // {   // verification
-            //     double psnr, nrmse, max_err, range;
-            //     verify(err_data.data(), dec_data, num_elements, psnr, nrmse, max_err, range);
-            // }
-
-            // compress(data, lossless_data_pos);
             return lossless_data;
         }
         
@@ -421,16 +432,7 @@ namespace SZ3 {
             size_t interp_compressed_size = 0;
             size_t quant_inds_total = 0;
 
-            T range = 0;
-            {
-                T max = data[0];
-                T min = data[0];
-                for (size_t i = 1; i < num_elements; i++) {
-                    if (max < data[i]) max = data[i];
-                    if (min > data[i]) min = data[i];
-                }
-                range = max - min;
-            }
+            
 
             T eb = quantizer.get_eb();
             std::cout << "Absolute error bound = " << eb << std::endl;
@@ -460,53 +462,6 @@ namespace SZ3 {
             // lossless_data_pos += l2_diff.size() * sizeof(T);
             lossless_size.push_back(lossless_data_pos - lossless_data);
 
-//             for (uint level = levels; level > level_progressive; level--) {
-//                 timer.start();
-
-// //                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
-//                 uint stride = 1U << (level - 1);
-
-//                 if (level == levels) {
-//                     quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
-//                 }
-//                 auto block_range = std::make_shared<
-//                         SZ3::multi_dimensional_range<T, N>>(data, std::begin(global_dimensions),
-//                                                            std::end(global_dimensions),
-//                                                            interp_dim_limit * stride, 0);
-
-//                 for (auto block = block_range->begin(); block != block_range->end(); ++block) {
-//                     auto end_idx = block.get_global_index();
-//                     for (int i = 0; i < N; i++) {
-//                         end_idx[i] += interp_dim_limit * stride;
-//                         if (end_idx[i] > global_dimensions[i] - 1) {
-//                             end_idx[i] = global_dimensions[i] - 1;
-//                         }
-//                     }
-//                     for (const auto &direction: directions) {
-//                         block_interpolation(data, data, block.get_global_index(), end_idx, &SZProgressiveMQuant::quantize,
-//                                             interpolators[interpolator_id], direction, stride, true);
-//                     }
-//                 }
-
-//                 auto quant_size = quant_inds.size();
-//                 quant_inds_total += quant_size;
-//                 write(quant_size, levelSize_pos);
-//                 auto size = encode_lossless(lossless_data_pos, lossless_size);
-//                 printf("level = %d , quant size = %lu , lossless size = %lu, time=%.3f\n", level, quant_size, size, timer.stop());
-
-//             }
-
-            // T *partial_data = new T[num_elements]; 
-            // memcpy(partial_data, data, num_elements * sizeof(T));
-            // if (level_progressive == levels) {
-            //     *partial_data = quantizer.recover(0, 0, quant_inds[quant_cnt++]);
-            // }
-            // for (uint l = level_progressive; l > 0; l--) {
-            //     for (const auto &direction: directions) {
-            //         block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::recover_no_quant,
-            //                             interpolators[interpolator_id], direction, 1U << (l - 1), true);
-            //     }
-            // }
             timer.start();
             
             for (uint level = level_progressive; level > 0; level--) {
@@ -613,10 +568,13 @@ namespace SZ3 {
 
         int levels = -1;
         int level_progressive = -1;
+        int layers = -1;
 //        int level_fill = 0;
         int interpolator_id;
         size_t interp_dim_limit, block_size;
         double eb_ratio = 0.5;
+        T range = 0;
+        std::vector<T> ebs;
         std::vector<std::string> interpolators;
         std::vector<int> quant_inds;
         std::vector<T> error;
@@ -629,6 +587,7 @@ namespace SZ3 {
         Quantizer quantizer;
         Encoder encoder;
         Lossless lossless;
+
 
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
@@ -1052,6 +1011,16 @@ namespace SZ3 {
             for (const auto &id: global_idx) {
                 printf("%lu ", id);
             }
+        }
+
+        void getRange(T* data) {
+            T max = data[0];
+            T min = data[0];
+            for (size_t i = 1; i < num_elements; i++) {
+                if (max < data[i]) max = data[i];
+                if (min > data[i]) min = data[i];
+            }
+            range = max - min;
         }
 
         std::vector<size_t> strategy(const std::vector<size_t> &levelSize, int limit) {
