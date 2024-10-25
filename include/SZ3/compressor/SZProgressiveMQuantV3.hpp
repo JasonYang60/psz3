@@ -93,132 +93,76 @@ namespace SZ3 {
                 // ebs = {(T)(range * 1e-6)};
                 ebs = {(T)(1e-6)};
                 std::cout << "[warning] param 'layers' too large." << std::endl;
+                layers = 1;
                 break;
             }
         }
 
-        T *decompress(uchar const *lossless_data, T *data, const T targetErrorBound) {
-            int lsize = N * level_progressive, bsize = bitgroup.size();
-            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
-
-            std::vector<size_t> levelSize(lsize, 0);
-            {
-                uchar const *buffer = lossless_data;
-                //load lossless_size
-                size_t lossless_size_size = 0;
-                read(lossless_size_size, buffer);
-                std::vector<size_t> lossless_size(lossless_size_size, 0);
-                read(lossless_size.data(), lossless_size_size, buffer);
-                size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
-
-                //load dim && l2_diff
-                size_t buffer_len = lossless_size[0];
-                retrieved_size += buffer_len;
-                buffer_len -= (lossless_size_size + 1) * sizeof(size_t);
-                // uchar const *cmp_data_pos = lossless_data;
-                read(global_dimensions.data(), N, buffer, buffer_len);
-                num_elements = std::accumulate(global_dimensions.begin(), global_dimensions.end(), (size_t) 1, std::multiplies<>());
-                read(interp_dim_limit, buffer, buffer_len);
-                size_t level_cnt = 0;
-                read(levelSize.data(), levelSize.size(), buffer, buffer_len);
-            }
-            // size_t total_compressed_size;
-            // uchar * compressed = compress(data.get(), total_compressed_size);
-            const int progressive_layer_limit = 4096;
-            int progressive_layer = progressive_layer_limit;
-            std::vector<size_t> throwawayBits(lsize, 0);
-            for(int i = 0; i < ebs.size(); i++){
-                if(targetErrorBound >= ebs[i]){
-                    throwawayBits = strategy(levelSize, (int)floor(targetErrorBound / ebs[i]) - 1);
-                    progressive_layer = i;
-                    break;
-                }
-            }
-
-
-            if(progressive_layer == progressive_layer_limit) {
-                std::cout << "[warning]target error bound should larger than 1e-6 * range;" << std::endl;
-            }
-
-            size_t compressed_size = 0;
-            uchar const * lossless_data_pos = lossless_data;
+        T *decompress(uchar const *lossless_data, T *data, std::vector<T> &targetEBs) {
             T *dec_data = new T[num_elements];
-            if(progressive_layer == 0){
-                for(int i = 0; i < lsize; i++){
-                    bdelta[i] = bsize - throwawayBits[i];
-                }
+            if(targetEBs.empty()){
+                std::cout << "[error]target error bound is empty." << std::endl;
+                return dec_data;
             }
-            compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize);
-            lossless_data_pos += compressed_size;
-            {   // verification
-                double psnr, nrmse, max_err, range;
-                verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-            }
-            if(progressive_layer > 0) {
-                T *residuel_data = new T[num_elements];
-                for (int layer = 1; layer < ebs.size(); layer++){
-                    if(layer > progressive_layer){
-                        break;
-                    }
-                    bsum.clear();
-                    bsum.resize(lsize, 0);
-                    bdelta.clear();
-                    bdelta.resize(lsize, bsize);
-                    if(layer == progressive_layer){
-                        for(int j = 0; j < lsize; j++){
-                            bdelta[j] = bsize - throwawayBits[j];
-                        }
-                    }
-                    compressed_size = decompress(lossless_data_pos, residuel_data, bsum, bdelta, levelSize);
-                    lossless_data_pos += compressed_size;
-
-                    for (size_t i = 0; i < num_elements; i++){
-                        dec_data[i] += residuel_data[i];
-                    }
-                    {   // verification
-                        double psnr, nrmse, max_err, range;
-                        verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-                    }
-                    if(layer == progressive_layer){
-                        break;
-                    }
-                }
+            std::cout << "-------- error bound = " << targetEBs[0] << std::endl;
+            decompress(lossless_data, data, dec_data, targetEBs[0], 0);
+            for(int i = 1; i < targetEBs.size(); i++) {
+                std::cout << "-------- error bound = " << targetEBs[i] << std::endl;
+                decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
             }
             return dec_data;
         }
 
-        size_t decompress(uchar const *lossless_data, 
-                            T *dec_data,
-                            std::vector<int>& bsum,
-                            const std::vector<int>& bdelta,
-                            std::vector<size_t> &levelSize
-                            ) {
-            Timer timer(true);
-            quant_inds.reserve(num_elements);
+        void *decompress(uchar const *lossless_data, T *data, T *dec_data, const T targetErrorBound, T lastEB) {
+            // if(targetErrorBound >= lastEB){
+            //     return dec_data;
+            // }
+            int lsize = N * level_progressive, bsize = bitgroup.size();
+            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+            uchar const * lossless_data_pos = lossless_data;
+
+            std::vector<size_t> levelSize(lsize, 0);
+            std::vector<size_t> lossless_size;
+            uchar const * cmp_data_pos = nullptr;
+            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+
+            int progressive_layer_old, progressive_layer_new = 0;
+            std::vector<std::vector<int>> bitGroupOfLayer_old = calcBitgroup(lastEB, levelSize);
+            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, levelSize);
+
+            // std::vector<std::vector<int>> bitGroupOfLayer_diff(layers, std::vector<int>(lsize, 0));
+            
+
+            return decompress(lossless_data, data, dec_data, bitGroupOfLayer_new, bitGroupOfLayer_old);
+        }
+
+        void loadcfg(uchar const *lossless_data, 
+                    std::vector<size_t> &levelSize,
+                    std::vector<size_t> &lossless_size, 
+                    uchar const * &cmp_data_pos
+                    ) {
+
+            quantizer.postdecompress_data();
 
             uchar const *buffer = lossless_data;
-
             //load lossless_size
             size_t lossless_size_size = 0;
             read(lossless_size_size, buffer);
-            std::vector<size_t> lossless_size(lossless_size_size, 0);
+            lossless_size.clear();
+            lossless_size.resize(lossless_size_size, 0);
             read(lossless_size.data(), lossless_size_size, buffer);
-            size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
 
             //load dim && l2_diff
             size_t buffer_len = lossless_size[0];
             retrieved_size += buffer_len;
             buffer_len -= (lossless_size_size + 1) * sizeof(size_t);
-            uchar const *cmp_data_pos = lossless_data;
+            cmp_data_pos = lossless_data;
             read(global_dimensions.data(), N, buffer, buffer_len);
             num_elements = std::accumulate(global_dimensions.begin(), global_dimensions.end(), (size_t) 1, std::multiplies<>());
             read(interp_dim_limit, buffer, buffer_len);
-            size_t level_cnt = 0;
+            levelSize.clear();
+            levelSize.resize(N * level_progressive, 0);
             read(levelSize.data(), levelSize.size(), buffer, buffer_len);
-
-            l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
-            // read(l2_diff.data(), l2_diff.size(), buffer, buffer_len);
-
             {   // load unpredictable data
                 {   // mv buffer pointer to the address of unpredictable data
                     buffer = lossless_data;         // ???
@@ -236,8 +180,183 @@ namespace SZ3 {
                 quantizer.load(dcmpDataRef, dcmpSize);
                 delete []dcmpData;
                 printf("[Log] Loading Unpredictable data...\n");
-                printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+                printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             }
+        }
+        
+        std::vector<std::vector<int>> calcBitgroup(T targetErrorBound, std::vector<size_t> const& levelSize){
+            int lsize = N * level_progressive, bsize = bitgroup.size();
+            std::vector<std::vector<int>> bitGroupOfLayer(layers, std::vector<int>(lsize, 0));
+            if(targetErrorBound == 0){
+                return bitGroupOfLayer;
+            }
+            assert(ebs.size() == bitGroupOfLayer.size());
+
+            const int progressive_layer_limit = 4096;
+            std::vector<int> throwawayBits(lsize, 0);
+            for(int i = 0; i < layers; i++){
+                if(targetErrorBound >= ebs[i]){
+                    throwawayBits = strategy(levelSize, (int)floor(targetErrorBound / ebs[i]) - 1);
+                    for(int j = 0; j < lsize; j++){
+                        bitGroupOfLayer[i][j] =std::max(0, std::min(bsize - throwawayBits[j], bsize));
+                    }
+                    break;
+                } else {
+                    bitGroupOfLayer[i].assign(lsize, bsize);
+                }
+            }  
+            return bitGroupOfLayer;
+        }
+
+        void *decompress(uchar const *lossless_data, T *data, T *dec_data,
+                    std::vector<std::vector<int>> bitGroupOfLayer_new, 
+                    std::vector<std::vector<int>> bitGroupOfLayer_old
+                    ){
+            int lsize = N * level_progressive, bsize = bitgroup.size();
+            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+            uchar const * lossless_data_pos = lossless_data;
+
+            std::vector<size_t> levelSize(lsize, 0);
+            std::vector<size_t> lossless_size;
+            uchar const * cmp_data_pos = nullptr;
+
+            std::vector<std::vector<int>> bitGroupOfLayer_diff(layers, std::vector<int>(lsize, 0));
+            for(int i = 0; i < layers; i++) {
+                for(int j = 0; j < lsize; j++){
+                    bitGroupOfLayer_diff[i][j] = bitGroupOfLayer_new[i][j] - bitGroupOfLayer_old[i][j];
+                }
+            }
+            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+
+            size_t compressed_size = 0;
+            if(!allzero(bitGroupOfLayer_diff[0])){
+                
+                bool update = !allzero(bitGroupOfLayer_old[0]);
+                bsum = bitGroupOfLayer_old[0];
+                bdelta = bitGroupOfLayer_diff[0];
+                compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, update);
+                {   // verification
+                    double psnr, nrmse, max_err, range;
+                    verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+                }
+            } else {
+                compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
+                std::cout << "[log]skipping layer 0" << std::endl;
+            }
+            lossless_data_pos += compressed_size;
+            {
+                T *residual_data = new T[num_elements];
+                for (int layer = 1; layer < ebs.size(); layer++){
+                    
+                    bsum.clear();
+                    bsum.resize(lsize, 0);
+                    
+                    bool update = !allzero(bitGroupOfLayer_old[layer]);
+                    bsum = bitGroupOfLayer_old[layer];
+
+                    bdelta.clear();
+                    bdelta.resize(lsize, bsize);
+                    bdelta = bitGroupOfLayer_diff[layer];
+                    loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+                    if(allzero(bitGroupOfLayer_diff[layer])){ // bitGroupOfLayer uninitialized at this layer
+                        compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
+                        lossless_data_pos += compressed_size;
+                        std::cout << "[log]skipping layer " << layer << std::endl;
+                    } else {
+                        compressed_size = decompress(lossless_data_pos, residual_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, update);
+                        lossless_data_pos += compressed_size;
+                        // {
+                        //     T a = dec_data[4823183];
+                        //     T b = residual_data[4823183];
+                        //     T c = data[4823183];
+                        //     T z = a + b;
+                        // }
+                        for (size_t i = 0; i < num_elements; i++){
+                            dec_data[i] += residual_data[i];
+                        }
+                        {   // verification
+                            double psnr, nrmse, max_err, range;
+                            verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+                        }
+                    }
+                    
+                }
+                delete []residual_data;
+            }
+            return dec_data;
+        }
+
+        T *decompress1(uchar const *lossless_data, T *data, T *dec_data, const T targetErrorBound) {
+            int lsize = N * level_progressive, bsize = bitgroup.size();
+            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
+            uchar const * lossless_data_pos = lossless_data;
+
+            std::vector<size_t> levelSize(lsize, 0);
+            std::vector<size_t> lossless_size;
+            uchar const * cmp_data_pos = nullptr;
+            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+
+            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, levelSize);
+            std::vector<std::vector<int>> bitGroupOfLayer_old(layers, std::vector<int>(lsize, 0));
+
+            return decompress(lossless_data, data, dec_data, bitGroupOfLayer_new, bitGroupOfLayer_old);
+
+
+
+            // size_t compressed_size = 0;
+
+            // bdelta = bitGroupOfLayer[0];
+            // compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, false);
+            // lossless_data_pos += compressed_size;
+            // {   // verification
+            //     double psnr, nrmse, max_err, range;
+            //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+            // }
+            // {
+            //     T *residual_data = new T[num_elements];
+            //     for (int layer = 1; layer < ebs.size(); layer++){
+            //         if(bitGroupOfLayer[layer][0] < 0){ // bitGroupOfLayer uninitialized at this layer
+            //             break;
+            //         }
+            //         bsum.clear();
+            //         bsum.resize(lsize, 0);
+            //         bdelta.clear();
+            //         bdelta.resize(lsize, bsize);
+            //         bdelta = bitGroupOfLayer[layer];
+            //         loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+            //         compressed_size = decompress(lossless_data_pos, residual_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, false);
+            //         lossless_data_pos += compressed_size;
+
+            //         for (size_t i = 0; i < num_elements; i++){
+            //             dec_data[i] += residual_data[i];
+            //         }
+            //         {   // verification
+            //             double psnr, nrmse, max_err, range;
+            //             verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
+            //         }
+            //     }
+            //     delete []residual_data;
+            // }
+            // return dec_data;
+        }
+
+        size_t decompress(uchar const *lossless_data, 
+                            T *dec_data,
+                            std::vector<int>& bsum,
+                            const std::vector<int>& bdelta,
+                            std::vector<size_t> &levelSize,
+                            std::vector<size_t> &lossless_size,
+                            uchar const *cmp_data_pos,
+                            bool update
+                            ) {
+            size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
+            quant_inds.reserve(num_elements);
+            l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
+            // read(l2_diff.data(), l2_diff.size(), buffer, buffer_len);
+
+            // size_t level_cnt = 0;
+
+            Timer timer(true);
             //load non-progressive levels
             int lossless_id = 1;        // ???
             lossless_data += lossless_size[0];
@@ -266,10 +385,10 @@ namespace SZ3 {
                                     bsum, bdelta,
                                     bsize, lsize,
                                     data_lb, size_lb,
-                                    levelSize, level_cnt, false);
+                                    levelSize, update);
             }
             quantizer.postdecompress_data();
-            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
 
             return compressed_size;
             //decompress_progressive(dec_data, cmp_data_pos, prog_data_pos, lossless_size,
@@ -284,10 +403,10 @@ namespace SZ3 {
                                 std::vector<uchar const *> & data_lb,
                                 std::vector<size_t> & size_lb,
                                 std::vector<size_t> & levelSize,
-                                size_t & level_cnt,
+                                // size_t & level_cnt,
                                 bool update
                                 ) {
-            size_t level_cnt_temp = level_cnt;
+            // size_t level_cnt_temp = level_cnt;
             {   // print eg.1 1 0 -> 1 1 1
                 printf("\n-----------------------\n");
                 for (int l = 0; l < lsize; l++) {
@@ -328,23 +447,23 @@ namespace SZ3 {
 
                     result["level"] = level;
                     result["direct"] = direct;
-                        
+                    size_t quant_size = levelSize[(level_progressive - level) * N + direct];
                     int bg_end = std::min(bsize, bsum[lid] + bdelta[lid]);
                     {   // load bit group data into quant_ids[ ]
                         quant_inds.clear();
                         quant_cnt = 0;
-                        quant_inds.resize(levelSize[level_cnt], 0);
+                        quant_inds.resize(quant_size, 0);
                         if (bdelta[lid] > 0){
                             for (int b = bsum[lid]; b < bg_end; b++) {
                                 // l2_proj = l2_diff[lid * bsize + b];
 //                                    printf("projected l2 delta = %.10G\n", l2_diff[lid * bsize + b]);
                                 uchar const *bg_data = data_lb[lid * bsize + b];
                                 size_t bg_len = size_lb[lid * bsize + b];
-                                lossless_decode_bitgroup(b, bg_data, bg_len, levelSize[level_cnt]);
+                                lossless_decode_bitgroup(b, bg_data, bg_len, quant_size);
                                 // printf("--------[Log] bitGroup_len = %d\n", bg_len);
                             }
                         }
-                        level_cnt++; 
+                        // level_cnt++; 
                     }
                     if(level_progressive == levels && lid == 0) // retrive
                     {
@@ -376,11 +495,11 @@ namespace SZ3 {
                     quantizer.recover_from_delta(idx, dec_data[idx], dec_delta[idx]);
                 }
             }
-            level_cnt = level_cnt_temp;
+            // level_cnt = level_cnt_temp;
             // {   // verification
             //     double psnr, nrmse, max_err, range, l2_no_propo = 0;
             //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
-            //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(float)), retrieved_size);
+            //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             // }
             std::cout << "decompress time = " << timer.stop() << std::endl;
             return dec_data;
@@ -602,7 +721,7 @@ namespace SZ3 {
 
         //debug only
         double max_error;
-//        float eb;
+//        T eb;
         void
         lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size) {
             Timer timer(true);
@@ -1023,10 +1142,10 @@ namespace SZ3 {
             range = max - min;
         }
 
-        std::vector<size_t> strategy(const std::vector<size_t> &levelSize, int limit) {
+        std::vector<int> strategy(const std::vector<size_t> &levelSize, int limit) {
             // assert(levelSize.size() == N * level_progressive);
-            assert(limit > 0);
-            std::vector<size_t> throwawayBits;
+            assert(limit >= 0);
+            std::vector<int> throwawayBits;
             size_t sizelb = levelSize.size();
             throwawayBits.resize(sizelb, 0);
 
@@ -1097,6 +1216,15 @@ namespace SZ3 {
             quant_cnt = 0;
             quant_inds.clear();
             error.clear();
+        }
+
+        bool allzero(std::vector<int> &a) {
+            for(auto ele : a) {
+                if(ele) {
+                    return false;
+                }
+            }
+            return true;
         }
     };
 };

@@ -71,7 +71,9 @@ float *interp_decompress(const char *path, float target_eb, int interp_op, int d
             SZ3::Lossless_zstd(),
             dims, interp_op, direction_op, 50000, layers, block_size
     );
-    dec_data = sz.decompress(compressed, data.get(), target_eb);
+    // dec_data = sz.decompress(compressed, data.get(), target_eb);
+    std::vector<float> targetEBs = {1e-2, 1e-3, 1e-4};
+    dec_data = sz.decompress(compressed, data.get(), targetEBs);
 
     timer.stop("Decompression");
 
