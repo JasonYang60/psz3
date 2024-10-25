@@ -73,42 +73,32 @@ namespace SZ3 {
 
             level_progressive = levels;
 
-            // getRange(data);
-            switch (layers)
-            {
-            case 1:
-                // ebs = {(T)(range * 1e-6)};
-                ebs = {(T)(1e-6)};
-
-                break;
-            case 2:
-                // ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
-                ebs = {(T)(1e-3), (T)(1e-6)};
-                break;
-            case 3:
-                // ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
-                ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
-                break;
-            default:
-                // ebs = {(T)(range * 1e-6)};
-                ebs = {(T)(1e-6)};
-                std::cout << "[warning] param 'layers' too large." << std::endl;
-                layers = 1;
-                break;
-            }
+            
         }
 
         T *decompress(uchar const *lossless_data, T *data, std::vector<T> &targetEBs) {
+            setupLayers(data);
+            printf("range = %f\n", range);
+            for(auto &eb : targetEBs){
+                eb *= range;    // relative error bound
+            }
             T *dec_data = new T[num_elements];
             if(targetEBs.empty()){
                 std::cout << "[error]target error bound is empty." << std::endl;
                 return dec_data;
             }
-            std::cout << "-------- error bound = " << targetEBs[0] << std::endl;
+            std::cout << std::endl;
+            std::cout << "-------- error bound = " << targetEBs[0] << " --------" << std::endl;
+            
             decompress(lossless_data, data, dec_data, targetEBs[0], 0);
+            std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
+            
             for(int i = 1; i < targetEBs.size(); i++) {
-                std::cout << "-------- error bound = " << targetEBs[i] << std::endl;
+                std::cout << std::endl;
+                std::cout << "-------- error bound = "  << targetEBs[i] << " --------" << std::endl;
                 decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
+            std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
+
             }
             return dec_data;
         }
@@ -179,8 +169,8 @@ namespace SZ3 {
                 uchar const * dcmpDataRef = dcmpData;
                 quantizer.load(dcmpDataRef, dcmpSize);
                 delete []dcmpData;
-                printf("[Log] Loading Unpredictable data...\n");
-                printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
+                // printf("[Log] Loading Unpredictable data...\n");
+                // printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             }
         }
         
@@ -241,7 +231,7 @@ namespace SZ3 {
                 }
             } else {
                 compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
-                std::cout << "[log]skipping layer 0" << std::endl;
+                // std::cout << "[Log] skipping layer 0" << std::endl;
             }
             lossless_data_pos += compressed_size;
             {
@@ -363,7 +353,7 @@ namespace SZ3 {
 
             uchar const *prog_data_pos = lossless_data;
 
-            std::cout << "Progressive decompression..." << std::endl;
+            // std::cout << "Progressive decompression..." << std::endl;
             int lsize = N * level_progressive, bsize = bitgroup.size();
 
             //load non-progressive levels
@@ -408,7 +398,7 @@ namespace SZ3 {
                                 ) {
             // size_t level_cnt_temp = level_cnt;
             {   // print eg.1 1 0 -> 1 1 1
-                printf("\n-----------------------\n");
+                // printf("-----------------------\n");
                 for (int l = 0; l < lsize; l++) {
                     printf("%d ", bsum[l]);
                 }
@@ -506,7 +496,7 @@ namespace SZ3 {
         }
 
         uchar *compress(T *data, size_t & compressed_size) {
-            
+            setupLayers(data);
             uchar *lossless_data = new uchar[size_t((num_elements < 1000000 ? 100 : 2.0) * num_elements) * sizeof(T)]; //?
             uchar * lossless_data_pos = lossless_data;
             
@@ -588,7 +578,8 @@ namespace SZ3 {
 //                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
                 uint stride = 1U << (level - 1);
                 if (level == levels) {
-                    quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
+                    // quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
+                    quantize(0, data[0], 0);
                 }
                 for (int d = 0; d < N; d++) {
                     block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::quantize,
@@ -1225,6 +1216,32 @@ namespace SZ3 {
                 }
             }
             return true;
+        }
+
+        void setupLayers(T *data){
+            getRange(data);
+            switch (layers)
+            {
+            case 1:
+                ebs = {(T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+
+                break;
+            case 2:
+                ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-3), (T)(1e-6)};
+                break;
+            case 3:
+                ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
+                break;
+            default:
+                ebs = {(T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+                std::cout << "[warning] param 'layers' too large." << std::endl;
+                layers = 1;
+                break;
+            }
         }
     };
 };
