@@ -6,7 +6,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/debug/test/sz_pinterp_mquant_v3", // 可执行文件路径
-            "args": ["${workspaceFolder}/debug/einspline_288_115_69_69.pre.f32.dat", "-4", "288","115","69", "69","1e-4","0","0","3","128",], // 传递给程序的命令行参数
+            "args": ["${workspaceFolder}/debug/velocity_x.dat", "-3", "512","512","512","1e-4","0","0","1","128",], // 传递给程序的命令行参数
             "cwd": "${workspaceFolder}",
             // "miDebuggerPath": "/usr/bin/lldb",  // 明确指定 LLDB 路径
             "preLaunchTask": "build", // 调试前自动执行的任务（如编译任务）

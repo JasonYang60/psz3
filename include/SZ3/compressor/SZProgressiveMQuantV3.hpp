@@ -781,6 +781,13 @@ namespace SZ3 {
             // std::cout << "------[Log] quant size = " << quant_size << std::endl;
             for (size_t i = 0; i < quant_size; i++) {
                 quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+                // quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift)) - 0xaaaaaaaau;
+
+                // if(bitshift < 16){
+                //     quant_inds[i] += (bitshift == 0) ? quant_ind_truncated[i] : (( quant_ind_truncated[i] == 1 ) ? (1 << (bitshift - 1)) : - (1 << (bitshift - 1)));
+                // }
+                // quant_inds[i] += (quant_ind_truncated[i] << bitshift) - 256;
+
                 // if(quant_size == 4 && bg == 0)
                 // {
                 //     std::cout << "------[Log] quant_inds[i] = " << quant_inds[i] << std::endl;
@@ -801,6 +808,10 @@ namespace SZ3 {
             {   // convert quant_inds to negabinary based
                 for (size_t i = 0; i < qsize; i++) {
                     quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                    // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
+
+                    
+                    // quant_inds[i] += (1 << 15) - 1;
                 }
             }
 
@@ -1175,6 +1186,7 @@ namespace SZ3 {
                     size_t max_j = 0;
                     for(int k = 0; k <= BITGROUP_SEARCHING_LIMIT; k++){
                         unsigned int cost_k = (k == 0) ? 0 : (0xaaaaaaaau >> (32 - k)) << 1;
+                        // unsigned int cost_k = (k == 0) ? 0 : (1 << k);
 
                         if (j >= cost_k){
                             long long value = dp[i - 1][j - cost_k] + k * NonZeroLevelSize[i - 1];
@@ -1191,6 +1203,8 @@ namespace SZ3 {
             for (size_t i = NewSizelb; i >= 1; i--){
                 for (int k = 0; k <= BITGROUP_SEARCHING_LIMIT; k++){
                     unsigned int cost_k = (k == 0) ? 0 : (0xaaaaaaaau >> (32 - k)) << 1;
+                    // unsigned int cost_k = (k == 0) ? 0 : (1 << k);
+
 
                     if (remaining_limit < cost_k) {break;}
                     if (dp[i][remaining_limit] == dp[i - 1][remaining_limit - cost_k] + k * NonZeroLevelSize[i - 1]){

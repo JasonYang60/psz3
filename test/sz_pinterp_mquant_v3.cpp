@@ -34,7 +34,7 @@ SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
         auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
         auto sz = SZ3::SZProgressiveMQuant<float, N, SZ3::LinearQuantizer2<float>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
                 // SZ3::LinearQuantizer2<float>(num, eb, 524288),
-                SZ3::LinearQuantizer2<float>(num, 1, 65536), // the second arg is dummy.
+                SZ3::LinearQuantizer2<float>(num, 1), // the second arg is dummy.
                 SZ3::HuffmanEncoder<int>(),
                 // SZ3::ArithmeticEncoder<int>(),
                 SZ3::Lossless_zstd(3),
@@ -65,7 +65,7 @@ float *interp_decompress(const char *path, float target_eb, int interp_op, int d
     auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
     auto sz = SZ3::SZProgressiveMQuant<float, N, SZ3::LinearQuantizer2<float>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
             // SZ3::LinearQuantizer2<float>(num, eb, 524288),
-            SZ3::LinearQuantizer2<float>(num, 1, 65536), // the second arg is dummy.
+            SZ3::LinearQuantizer2<float>(num, 1), // the second arg is dummy.
             SZ3::HuffmanEncoder<int>(),
             // SZ3::ArithmeticEncoder<int>(),
             SZ3::Lossless_zstd(),

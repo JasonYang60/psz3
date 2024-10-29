@@ -54,7 +54,11 @@ namespace SZ3 {
                 if (diff < 0) {
                     quant_index = -quant_index;
                     quant_index_shifted = -half_index;
+                    // quant_index_shifted = this->radius - half_index;
+
                 } else {
+                    // quant_index_shifted = this->radius + half_index;
+
                     quant_index_shifted = half_index;
                 }
                 T decompressed_data = pred + quant_index * this->error_bound;
@@ -94,9 +98,6 @@ namespace SZ3 {
         }
 
         void recover_from_delta(size_t idx, T &dest, T delta) {
-            if(idx == 3780504) {
-                int a = 0;
-            }
             if (!isunpred[idx]) {
                 dest += delta;
             }
@@ -123,6 +124,7 @@ namespace SZ3 {
 
 
         T recover_pred(T pred, int quant_index) {
+            // return pred + 2 * ((quant_index - this->radius)) * this->error_bound;
             return pred + 2 * (quant_index) * this->error_bound;
         }
 
