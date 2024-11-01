@@ -52,7 +52,7 @@ SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
 }
 
 template<uint N, class ... Dims>
-float *interp_decompress(const char *path, float target_eb, int interp_op, int direction_op,
+float *interp_decompress(const char *path, std::vector<float> & target_ebs, int interp_op, int direction_op,
                                 int layers, int block_size, SZ3::uchar * compressed, bool writeintoFile, Dims ... args){
     size_t num = 0;
     auto data = SZ3::readfile<float>(path, num);
@@ -72,8 +72,7 @@ float *interp_decompress(const char *path, float target_eb, int interp_op, int d
             dims, interp_op, direction_op, 50000, layers, block_size
     );
     // dec_data = sz.decompress(compressed, data.get(), target_eb);
-    std::vector<float> targetEBs = {1e-2, 1e-3, 1e-4};
-    dec_data = sz.decompress(compressed, data.get(), targetEBs);
+    dec_data = sz.decompress(compressed, data.get(), target_ebs);
 
     timer.stop("Decompression");
 
@@ -106,12 +105,12 @@ float *interp_decompress(const char *path, float target_eb, int interp_op, int d
 }
 
 template<uint N, class ... Dims>
-double interp_compress_decompress(const char *path, float target_eb, int interp_op, int direction_op,
+double interp_compress_decompress(const char *path, std::vector<float> &target_ebs, int interp_op, int direction_op,
                                 int layers, int block_size, Dims ... args) {
     double compression_ratio = -1;
     SZ3::uchar * compressed = interp_compress<N>(path, interp_op, direction_op, layers, block_size, 
                                             compression_ratio, std::forward<Dims>(args)...);
-    float * dec_data = interp_decompress<N>(path, target_eb, interp_op, direction_op, layers, block_size, 
+    float * dec_data = interp_decompress<N>(path, target_ebs, interp_op, direction_op, layers, block_size, 
                                             compressed, false, std::forward<Dims>(args)...);
     return compression_ratio;
 }
@@ -120,10 +119,10 @@ double interp_compress_decompress(const char *path, float target_eb, int interp_
 int main(int argc, char **argv) {
     if (argc < 2) {
         std::cout << "psz usage: " << argv[0] <<
-                  " data_file -num_dim dim0 .. dimn target_abs_eb [interp_op direction_op layers block_size]"
+                  " data_file -num_dim dim0 .. dimn target_eb_num target_abs_eb1 target_abs_eb2 ... [interp_op direction_op layers block_size]"
                   << std::endl
                   << "example: " << argv[0] <<
-                  " qmcpack.dat -3 33120 69 69 1e-3 [1 0 3 128]" << std::endl;
+                  " qmcpack.dat -3 33120 69 69 3 1e-2 1e-3 1e-4 [1 0 3 128]" << std::endl;
         return 0;
     }
 
@@ -134,7 +133,12 @@ int main(int argc, char **argv) {
     for (int i = 0; i < dim; i++) {
         dims[i] = atoi(argv[argp++]);
     }
-    float target_eb = atof(argv[argp++]);
+    int target_eb_num = atoi(argv[argp++]);
+    
+    std::vector<float> target_ebs(target_eb_num);
+    for (int i = 0; i < target_eb_num; i++) {
+        target_ebs[i] = atof(argv[argp++]);
+    }
 
     int interp_op = 0; // linear
     int direction_op = 0; // dimension high -> low
@@ -165,16 +169,16 @@ int main(int argc, char **argv) {
     std::cout << "[Log] layers = " << layers << std::endl;
     std::cout << "[Log] block_size = " << block_size << std::endl;
     if (dim == 1) {
-        interp_compress_decompress<1>(argv[1], target_eb, interp_op, direction_op, layers,
+        interp_compress_decompress<1>(argv[1], target_ebs, interp_op, direction_op, layers,
                                       block_size, dims[0]);
     } else if (dim == 2) {
-        interp_compress_decompress<2>(argv[1], target_eb, interp_op, direction_op, layers,
+        interp_compress_decompress<2>(argv[1], target_ebs, interp_op, direction_op, layers,
                                       block_size, dims[0], dims[1]);
     } else if (dim == 3) {
-        interp_compress_decompress<3>(argv[1], target_eb, interp_op, direction_op, layers,
+        interp_compress_decompress<3>(argv[1], target_ebs, interp_op, direction_op, layers,
                                       block_size, dims[0], dims[1], dims[2]);
     } else if (dim == 4) {
-        interp_compress_decompress<4>(argv[1], target_eb, interp_op, direction_op, layers,
+        interp_compress_decompress<4>(argv[1], target_ebs, interp_op, direction_op, layers,
                                       block_size, dims[0], dims[1], dims[2], dims[3]);
     }
 

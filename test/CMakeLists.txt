@@ -24,4 +24,4 @@ endforeach ()
 
 enable_testing()
 
-add_test(NAME Uf48 COMMAND sz_pinterp_mquant_v3 ${CMAKE_CURRENT_BINARY_DIR}/Uf48.bin.dat -3 100 500 500 1e-4 0 0 3 128)
+add_test(NAME Uf48 COMMAND sz_pinterp_mquant_v3 ${CMAKE_CURRENT_BINARY_DIR}/Uf48.bin.dat -3 100 500 500 3 1e-2 1e-3 1e-4 0 0 3 128)
