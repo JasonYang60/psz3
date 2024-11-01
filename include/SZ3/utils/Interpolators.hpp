@@ -30,7 +30,8 @@ namespace SZ3 {
 
     template<class T>
     inline T interp_quad_3(T a, T b, T c) {
-        return (3 * a - 10 * b + 15 * c) / 8;
+        // return (3 * a - 10 * b + 15 * c) / 8;
+        return (3 * a + 6 * b - c) / 8;
     }
 
     template<class T>

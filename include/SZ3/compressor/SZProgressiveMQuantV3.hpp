@@ -1145,6 +1145,14 @@ namespace SZ3 {
         }
 
         std::vector<int> strategy(const std::vector<size_t> &levelSize, int limit) {
+            #include<cmath>
+            std::vector<size_t> levelSizeTemp{levelSize};
+            if(interpolators[interpolator_id] == "cubic") {
+                int sz = levelSize.size();
+                for(int i = 0; i < sz; i++){
+                    levelSizeTemp[i] = (size_t) (ceil(std::pow(1.25, (sz - 1 - i)) * levelSizeTemp[i]));
+                }
+            }
             // assert(levelSize.size() == N * level_progressive);
             assert(limit >= 0);
             std::vector<int> throwawayBits;
@@ -1157,7 +1165,7 @@ namespace SZ3 {
             for(size_t i = 0; i < sizelb; i++){
                 bool foundOne = false;
                 for(size_t j = (i > 0) ? NonZeroMap[i - 1] + 1 : 0; j < sizelb; j++){
-                    if(levelSize[j] > 0){
+                    if(levelSizeTemp[j] > 0){
                         NonZeroMap[i] = j;
                         foundOne = true;
                         break;
@@ -1172,7 +1180,7 @@ namespace SZ3 {
             NonZeroLevelSize.reserve(NewSizelb);
             for(size_t i = 0; i < NewSizelb; i++){
                 if(NonZeroMap[i] >= 0){
-                    NonZeroLevelSize.push_back(levelSize[NonZeroMap[i]]);
+                    NonZeroLevelSize.push_back(levelSizeTemp[NonZeroMap[i]]);
                 } else {
                     break;
                 }
