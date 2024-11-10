@@ -276,60 +276,6 @@ namespace SZ3 {
             return dec_data;
         }
 
-        T *decompress1(uchar const *lossless_data, T *data, T *dec_data, const T targetErrorBound) {
-            int lsize = N * level_progressive, bsize = bitgroup.size();
-            std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
-            uchar const * lossless_data_pos = lossless_data;
-
-            std::vector<size_t> levelSize(lsize, 0);
-            std::vector<size_t> lossless_size;
-            uchar const * cmp_data_pos = nullptr;
-            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
-
-            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, levelSize);
-            std::vector<std::vector<int>> bitGroupOfLayer_old(layers, std::vector<int>(lsize, 0));
-
-            return decompress(lossless_data, data, dec_data, bitGroupOfLayer_new, bitGroupOfLayer_old);
-
-
-
-            // size_t compressed_size = 0;
-
-            // bdelta = bitGroupOfLayer[0];
-            // compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, false);
-            // lossless_data_pos += compressed_size;
-            // {   // verification
-            //     double psnr, nrmse, max_err, range;
-            //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-            // }
-            // {
-            //     T *residual_data = new T[num_elements];
-            //     for (int layer = 1; layer < ebs.size(); layer++){
-            //         if(bitGroupOfLayer[layer][0] < 0){ // bitGroupOfLayer uninitialized at this layer
-            //             break;
-            //         }
-            //         bsum.clear();
-            //         bsum.resize(lsize, 0);
-            //         bdelta.clear();
-            //         bdelta.resize(lsize, bsize);
-            //         bdelta = bitGroupOfLayer[layer];
-            //         loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
-            //         compressed_size = decompress(lossless_data_pos, residual_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, false);
-            //         lossless_data_pos += compressed_size;
-
-            //         for (size_t i = 0; i < num_elements; i++){
-            //             dec_data[i] += residual_data[i];
-            //         }
-            //         {   // verification
-            //             double psnr, nrmse, max_err, range;
-            //             verify(data, dec_data, num_elements, psnr, nrmse, max_err, range);
-            //         }
-            //     }
-            //     delete []residual_data;
-            // }
-            // return dec_data;
-        }
-
         size_t decompress(uchar const *lossless_data, 
                             T *dec_data,
                             std::vector<int>& bsum,
@@ -621,58 +567,6 @@ namespace SZ3 {
 
         }
 
-
-        uchar *compress_residuel(T *data, std::vector<size_t> &lossless_size, uchar* lossless_data){
-            Timer timer(true);
-            size_t interp_compressed_size = 0;
-            size_t quant_inds_total = 0;
-
-            size_t totalSize = 0;
-            for(auto sz : lossless_size) {
-                totalSize += sz;
-            }
-
-            uchar *lossless_data_pos = lossless_data;
-            lossless_data_pos += totalSize;
-
-            T eb = quantizer.get_eb();
-            for (uint level = level_progressive; level > 0; level--) {
-                timer.start();
-
-//                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
-                uint stride = 1U << (level - 1);
-                if (level == levels) {
-                    quant_inds.push_back(quantizer.quantize_and_overwrite(0, *data, 0));
-                }
-                for (int d = 0; d < N; d++) {
-                    block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::quantize,
-                                        interpolators[interpolator_id], directions[d], stride, true);
-
-                    auto quant_size = quant_inds.size();
-                    quant_inds_total += quant_size;
-                    // write(quant_size, levelSize_pos);
-                    auto size = encode_lossless_bitplane((level_progressive - level) * N + d, lossless_data_pos, lossless_size, eb);
-                    printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
-                           level, d, quant_size, size, timer.stop());
-
-                }
-            }
-            std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
-            assert(quant_inds_total >= num_elements);
-
-            // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
-
-            uchar *buffer = new uchar[quantizer.get_unpred_size() * (sizeof(T) + sizeof(size_t)) + 40];
-            uchar *buffer_pos = buffer;
-            quantizer.save(buffer_pos);
-            size_t size = lossless.compress(buffer, buffer_pos - buffer, lossless_data_pos);
-            delete[] buffer;
-            
-            lossless_data_pos += size;
-            lossless_size.push_back(size);
-            return lossless_data;
-        }
-
     private:
         typedef void (SZProgressiveMQuant::*PredictionFunc)(size_t, T &, T);
 
@@ -699,14 +593,14 @@ namespace SZ3 {
         Lossless lossless;
 
 
-    //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
+       std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
     //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
     //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-       std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
 
@@ -719,6 +613,7 @@ namespace SZ3 {
 
             size_t length = data_length;
             retrieved_size += length;
+            if (length == 0) {return; }
             // artimetic
             // ---------------
             
@@ -783,19 +678,26 @@ namespace SZ3 {
                 quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
                 // quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift)) - 0xaaaaaaaau;
 
-                // if(bitshift < 16){
-                //     quant_inds[i] += (bitshift == 0) ? quant_ind_truncated[i] : (( quant_ind_truncated[i] == 1 ) ? (1 << (bitshift - 1)) : - (1 << (bitshift - 1)));
+                // int bitshiftcnt = bitshift;
+                // if(bitshiftcnt < 16){
+                //     for (int j = 0; j < bitgroup[bg]; j++){
+                //         int quant_ind_truncated_bit = (quant_ind_truncated[i] >> j) & 1;
+                //         int add = (bitshiftcnt == 0) ? quant_ind_truncated_bit : ((quant_ind_truncated_bit == 1 ) ? (1 << (bitshiftcnt - 1)) : - (1 << (bitshiftcnt - 1)));
+                //         quant_inds[i] += add;
+                //         bitshiftcnt++;
+                //     }
                 // }
-                // quant_inds[i] += (quant_ind_truncated[i] << bitshift) - 256;
+                // if(bitshift < 16) {
+                //     // int offset = ((((((unsigned int)(1 << 15) - 1) >> bitshift) << bitshift) << (bitshift + bitgroup[bg])) >> (bitshift + bitgroup[bg]));
+                //     int offset = (1 << 15) - 1;
+                //     quant_inds[i] += (quant_ind_truncated[i] << bitshift) - offset;
+                // }
 
-                // if(quant_size == 4 && bg == 0)
-                // {
-                //     std::cout << "------[Log] quant_inds[i] = " << quant_inds[i] << std::endl;
-                // }
             }
             // std::cout << "------[Log] quant_size = " << quant_size << std::endl;
             // std::cout << "------[Log] bg = " << bg << std::endl;
         }
+
 
         size_t encode_lossless_bitplane(int lid, uchar *&lossless_data_pos, std::vector<size_t> &lossless_size, T eb) {
             Timer timer;
@@ -870,34 +772,39 @@ namespace SZ3 {
 
                 // ---------------
                 // huffman && zstd
-                if (bitgroup[b] == 1) {
-                    encode_int_1bit(quants, buffer_pos);
-                } else if (bitgroup[b] == 2) {
-                    encode_int_2bits(quants, buffer_pos);
+                if(quants.size() > 0){
+                    if (bitgroup[b] == 1) {
+                        encode_int_1bit(quants, buffer_pos);
+                    } else if (bitgroup[b] == 2) {
+                        encode_int_2bits(quants, buffer_pos);
+                    } else {
+                            //TODO huffman tree is huge if using large radius on early levels
+                            // set different radius for each level
+                            encoder.preprocess_encode(quants, 0);
+                            encoder.save(buffer_pos);
+                            encoder.encode(quants, buffer_pos);
+                            encoder.postprocess_encode();
+                    }
+                    if(qsize < 128 && bitgroup[b] == 1) {
+                        memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
+                        size_t size = buffer_pos - buffer;
+        //                printf("%d %lu, ", bitgroup[b], size);
+                        total_size += size;
+                        lossless_data_pos += size;
+                        lossless_size.push_back(size);
+                    } else {
+                        size_t size = lossless.compress(
+                                buffer, buffer_pos - buffer, lossless_data_pos);
+        //                printf("%d %lu, ", bitgroup[b], size);
+                        total_size += size;
+                        lossless_data_pos += size;
+                        lossless_size.push_back(size);
+                    }
                 } else {
-                    //TODO huffman tree is huge if using large radius on early levels
-                    // set different radius for each level
-                    encoder.preprocess_encode(quants, 0);
-                    encoder.save(buffer_pos);
-                    encoder.encode(quants, buffer_pos);
-                    encoder.postprocess_encode();
+                    lossless_size.push_back(0);
                 }
 
-                if(qsize < 128 && bitgroup[b] == 1) {
-                    memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
-                    size_t size = buffer_pos - buffer;
-    //                printf("%d %lu, ", bitgroup[b], size);
-                    total_size += size;
-                    lossless_data_pos += size;
-                    lossless_size.push_back(size);
-                } else {
-                    size_t size = lossless.compress(
-                            buffer, buffer_pos - buffer, lossless_data_pos);
-    //                printf("%d %lu, ", bitgroup[b], size);
-                    total_size += size;
-                    lossless_data_pos += size;
-                    lossless_size.push_back(size);
-                }
+
                 // huffman && zstd ends
                 // ---------------
             }
@@ -1142,6 +1049,22 @@ namespace SZ3 {
                 if (min > data[i]) min = data[i];
             }
             range = max - min;
+        }
+
+        unsigned int calcUncerntaintyNegaBinary(unsigned int bit) {
+            assert(bit < 32);
+            return (bit == 0) ? 0 : (0xaaaaaaaau >> (32 - bit)) << 1;
+        }
+
+        std::vector<unsigned int> calcUncerntaintyBitGroup() {
+            std::vector<unsigned int> uncerntainty, throwbits;
+            int accum = 0;
+            for(auto bg : bitgroup){
+                throwbits.push_back(32 - accum); //quantized 32 bits integer
+                accum += bg;
+            }
+
+            return uncerntainty;
         }
 
         std::vector<int> strategy(const std::vector<size_t> &levelSize, int limit) {
