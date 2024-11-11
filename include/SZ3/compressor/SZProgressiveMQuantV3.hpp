@@ -79,6 +79,7 @@ namespace SZ3 {
         T *decompress(uchar const *lossless_data, T *data, std::vector<T> &targetEBs) {
             setupLayers(data);
             printf("range = %f\n", range);
+
             for(auto &eb : targetEBs){
                 eb *= range;    // relative error bound
             }
@@ -115,10 +116,12 @@ namespace SZ3 {
             std::vector<size_t> lossless_size;
             uchar const * cmp_data_pos = nullptr;
             loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
-
             int progressive_layer_old, progressive_layer_new = 0;
-            std::vector<std::vector<int>> bitGroupOfLayer_old = calcBitgroup(lastEB, levelSize);
-            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, levelSize);
+            lossless_size.erase(lossless_size.begin());
+            lossless_size.erase(lossless_size.end());
+
+            std::vector<std::vector<int>> bitGroupOfLayer_old = calcBitgroup(lastEB, lossless_size);
+            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, lossless_size);
 
             // std::vector<std::vector<int>> bitGroupOfLayer_diff(layers, std::vector<int>(lsize, 0));
             
@@ -174,7 +177,7 @@ namespace SZ3 {
             }
         }
         
-        std::vector<std::vector<int>> calcBitgroup(T targetErrorBound, std::vector<size_t> const& levelSize){
+        std::vector<std::vector<int>> calcBitgroup(T targetErrorBound, std::vector<size_t> const& size_lb){
             int lsize = N * level_progressive, bsize = bitgroup.size();
             std::vector<std::vector<int>> bitGroupOfLayer(layers, std::vector<int>(lsize, 0));
             if(targetErrorBound == 0){
@@ -184,12 +187,18 @@ namespace SZ3 {
 
             const int progressive_layer_limit = 4096;
             std::vector<int> throwawayBits(lsize, 0);
+
+            auto valueTable = calcValueTable(size_lb);
+            auto cost = calcUncerntaintyBitGroup();
+
             for(int i = 0; i < layers; i++){
                 if(targetErrorBound >= ebs[i]){
-                    throwawayBits = strategy(levelSize, (int)floor(targetErrorBound / ebs[i]) - 1);
+                    // throwawayBits = strategy(size_lb, (int)floor(targetErrorBound / ebs[i]) - 1);
+                    throwawayBits = strategy(valueTable, cost, (int)floor(targetErrorBound / ebs[i]) - 1);
                     for(int j = 0; j < lsize; j++){
-                        bitGroupOfLayer[i][j] =std::max(0, std::min(bsize - throwawayBits[j], bsize));
-                    }
+                        // bitGroupOfLayer[i][j] = std::max(0, std::min(bsize - throwawayBits[j], bsize));
+                        bitGroupOfLayer[i][j] = std::max(0, std::min(throwawayBits[j], bsize));
+                    } 
                     break;
                 } else {
                     bitGroupOfLayer[i].assign(lsize, bsize);
@@ -314,7 +323,7 @@ namespace SZ3 {
                         lossless_id++;
                     }
             }
-
+            
             if(level_progressive > 0)
             {
                 decompress_progressive(dec_data,
@@ -593,13 +602,14 @@ namespace SZ3 {
         Lossless lossless;
 
 
-       std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
+    //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
     //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
-    //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+       std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {32};
     //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
@@ -778,12 +788,12 @@ namespace SZ3 {
                     } else if (bitgroup[b] == 2) {
                         encode_int_2bits(quants, buffer_pos);
                     } else {
-                            //TODO huffman tree is huge if using large radius on early levels
-                            // set different radius for each level
-                            encoder.preprocess_encode(quants, 0);
-                            encoder.save(buffer_pos);
-                            encoder.encode(quants, buffer_pos);
-                            encoder.postprocess_encode();
+                        //TODO huffman tree is huge if using large radius on early levels
+                        // set different radius for each level
+                        encoder.preprocess_encode(quants, 0);
+                        encoder.save(buffer_pos);
+                        encoder.encode(quants, buffer_pos);
+                        encoder.postprocess_encode();
                     }
                     if(qsize < 128 && bitgroup[b] == 1) {
                         memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
@@ -1056,19 +1066,100 @@ namespace SZ3 {
             return (bit == 0) ? 0 : (0xaaaaaaaau >> (32 - bit)) << 1;
         }
 
-        std::vector<unsigned int> calcUncerntaintyBitGroup() {
-            std::vector<unsigned int> uncerntainty, throwbits;
+        unsigned int calcUncerntaintyBalance(unsigned int bit) {
+            assert(bit < 32);
+            return (bit == 0) ? 0 : (1 << bit);
+        }
+
+        std::vector<std::vector<int>> calcUncerntaintyBitGroup() {
+            std::vector<unsigned int> throwbits;
+            std::vector<std::vector<int>> uncerntainty(level_progressive * N, std::vector<int>(bitgroup.size() + 1, 0));
             int accum = 0;
             for(auto bg : bitgroup){
                 throwbits.push_back(32 - accum); //quantized 32 bits integer
                 accum += bg;
             }
-
+            throwbits.push_back(32 - accum);
+            #include<cmath>
+            for(int i = 0; i < level_progressive * N; i++) {
+                for (int b = 0; b < throwbits.size(); b++) {
+                    auto bitshift = throwbits[b];
+                    double cost = 0;
+                    if(bitshift == 32) {
+                        cost = std::pow(2, 32);
+                    } else {
+                        // cost = calcUncerntaintyBalance(bitshift);
+                        cost = calcUncerntaintyNegaBinary(bitshift);
+                    }
+                    if(interpolators[interpolator_id] == "cubic") {
+                        cost *= std::pow(1.25, level_progressive * N - 1 - i);
+                    }
+                    uncerntainty[i][b] = (int)ceil(cost);
+                }
+            }
             return uncerntainty;
         }
 
+            
+        std::vector<std::vector<size_t>> calcValueTable(std::vector<size_t> const& size_lb){
+            assert(size_lb.size() % bitgroup.size() == 0);
+            int levels = size_lb.size() / bitgroup.size();
+            std::vector<std::vector<size_t>> valueTable(levels, std::vector<size_t>(bitgroup.size() + 1, 0));
+            for(int l = 0; l < levels; l++) {
+                for(int b = bitgroup.size() - 1; b >= 0; b--) {
+                    valueTable[l][b] = valueTable[l][b + 1] + size_lb[(l + 1)* bitgroup.size() - b - 1];
+                }
+            }
+            return valueTable;
+        }
+
+        std::vector<int> strategy(std::vector<std::vector<size_t>> const& valueTable, std::vector<std::vector<int>> const& cost, unsigned long long int limit) {
+            // assert(valueTable.size() % cost.size() == 0);
+
+            int levels = valueTable.size();
+            int bgSize = cost[0].size(); // cost.size = bitgroup.size + 1
+            std::vector<std::vector<long long>> dp(levels + 1, std::vector<long long>(limit + 1, 0));
+            for (size_t i = 1; i <= levels; i++){
+                for(size_t j = 0; j <= limit; j++){
+                    long long maxValue = 0;
+                    size_t max_j = 0;
+                    for(int k = 0; k < bgSize; k++){// k : index of the threw away bit group
+                        unsigned int cost_k = cost[i - 1][k];
+                        
+                        // unsigned int cost_k = (k == 0) ? 0 : (1 << k);
+
+                        if (j >= cost_k){
+                            long long value = dp[i - 1][j - cost_k] + valueTable[i - 1][k];
+                            if (value > maxValue){
+                                max_j = j;
+                                maxValue = value;
+                            }
+                        }
+                    }
+                    dp[i][j] = maxValue;
+                }
+            }
+            double remaining_limit = limit;
+            std::vector<int> keptBitGroup(levels, 0);
+            for (size_t i = levels; i >= 1; i--){
+                for (int k = 0; k < bgSize; k++){
+                    unsigned int cost_k =  cost[i - 1][k];
+                    // unsigned int cost_k = (k == 0) ? 0 : (1 << k);
+
+                    if (remaining_limit < cost_k) {continue;}
+                    if (dp[i][remaining_limit] == dp[i - 1][remaining_limit - cost_k] + valueTable[i - 1][k]){
+                        // keptBitGroup[i - 1] = (k == bgSize - 1) ? -1 : k;
+                        keptBitGroup[i - 1] = k;
+
+                        remaining_limit -= cost_k;
+                        break;
+                    }
+                }
+            }
+            return keptBitGroup;
+        }
+
         std::vector<int> strategy(const std::vector<size_t> &levelSize, int limit) {
-            #include<cmath>
             std::vector<size_t> levelSizeTemp{levelSize};
             if(interpolators[interpolator_id] == "cubic") {
                 int sz = levelSize.size();
