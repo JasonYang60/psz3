@@ -606,10 +606,10 @@ namespace SZ3 {
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
-       std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
+    //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
         // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
-    //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+       std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
@@ -1271,7 +1271,6 @@ namespace SZ3 {
             case 1:
                 ebs = {(T)(range * 1e-6)};
                 // ebs = {(T)(1e-6)};
-
                 break;
             case 2:
                 ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
@@ -1280,6 +1279,10 @@ namespace SZ3 {
             case 3:
                 ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
                 // ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
+                break;
+            case 99:
+                ebs = {(T)(range * 1e-4)};
+                // ebs = {(T)(1e-6)};
                 break;
             default:
                 ebs = {(T)(range * 1e-6)};
