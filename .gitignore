@@ -7,3 +7,9 @@ cmake-build-debug
 cmake-build-release
 .idea
 install
+freq_line.png
+freq_log.png
+freq.png
+stats_1e-6cmp.1e-4dcmp.dat
+stats.dat
+stats.py
