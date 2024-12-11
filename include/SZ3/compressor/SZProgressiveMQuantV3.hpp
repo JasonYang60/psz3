@@ -92,12 +92,14 @@ namespace SZ3 {
             std::cout << "-------- error bound = " << targetEBs[0] << " --------" << std::endl;
             
             decompress(lossless_data, data, dec_data, targetEBs[0], 0);
+            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
             
             for(int i = 1; i < targetEBs.size(); i++) {
                 std::cout << std::endl;
                 std::cout << "-------- error bound = "  << targetEBs[i] << " --------" << std::endl;
                 decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
+            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
 
             }
@@ -333,7 +335,6 @@ namespace SZ3 {
                                     levelSize, update);
             }
             quantizer.postdecompress_data();
-            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
 
             return compressed_size;
             //decompress_progressive(dec_data, cmp_data_pos, prog_data_pos, lossless_size,
@@ -1256,6 +1257,7 @@ namespace SZ3 {
 
         void setupLayers(T *data){
             getRange(data);
+            printf("Value Range = %.4f\n", range);
             switch (layers)
             {
             case 1:
@@ -1271,6 +1273,9 @@ namespace SZ3 {
                 ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
                 // ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
                 break;
+            case 99:
+                ebs = {(T)(range * 1e-4)};
+                break;
             default:
                 ebs = {(T)(range * 1e-6)};
                 // ebs = {(T)(1e-6)};
@@ -1278,6 +1283,7 @@ namespace SZ3 {
                 layers = 1;
                 break;
             }
+            layers = ebs.size();
         }
     };
 };
