@@ -409,6 +409,9 @@ namespace SZ3 {
                             }
                         }
                         // level_cnt++; 
+                        // if(direct == N - 1 && level == 1) {
+                        //     writeVectorToBinaryFile(quant_inds, "stats.dat");
+                        // }
                     }
                     if(level_progressive == levels && lid == 0) // retrive
                     {
@@ -542,6 +545,7 @@ namespace SZ3 {
 
                     auto quant_size = quant_inds.size();
                     quant_inds_total += quant_size;
+                    
                     write(quant_size, levelSize_pos);
                     auto size = encode_lossless_bitplane((level_progressive - level) * N + d, lossless_data_pos, lossless_size, eb);
                     // printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
@@ -605,8 +609,8 @@ namespace SZ3 {
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
-    //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
-        // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {16, 8, 4, 1, 1, 1, 1};
+        // std::vector<int> bitgroup = {16, 8, 7,1};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
        std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
     //    std::vector<int> bitgroup = {32};
@@ -664,8 +668,8 @@ namespace SZ3 {
             std::vector<int> quant_ind_truncated;
             if (bitgroup[bg] == 1) {
                 quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
-            } else if (bitgroup[bg] == 2) {
-                quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
+            // } else if (bitgroup[bg] == 2) {
+            //     quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
             } else {
                 encoder.load(compressed_data_pos, length);
                 quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
@@ -785,8 +789,8 @@ namespace SZ3 {
                 if(quants.size() > 0){
                     if (bitgroup[b] == 1) {
                         encode_int_1bit(quants, buffer_pos);
-                    } else if (bitgroup[b] == 2) {
-                        encode_int_2bits(quants, buffer_pos);
+                    // } else if (bitgroup[b] == 2) {
+                    //     encode_int_2bits(quants, buffer_pos);
                     } else {
                         //TODO huffman tree is huge if using large radius on early levels
                         // set different radius for each level
@@ -1264,7 +1268,7 @@ namespace SZ3 {
 
                 break;
             case 2:
-                ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
+                ebs = {(T)(range * (1 << 8) * 1e-6), (T)(range * 1e-6)};
                 // ebs = {(T)(1e-3), (T)(1e-6)};
                 break;
             case 3:
@@ -1279,6 +1283,33 @@ namespace SZ3 {
                 break;
             }
         }
+
+        
+
+        // void writeVectorToBinaryFile(const std::vector<int>& vec, const std::string& filename) {
+        //     #include <iostream>
+        //     #include <vector>
+        //     #include <fstream>
+        //     std::ofstream outFile(filename);
+            
+        //     if (!outFile) {
+        //         std::cerr << "Error opening file!" << std::endl;
+        //         return;
+        //     }
+            
+        //     // 第一行写入元素个数
+        //     outFile << vec.size() << std::endl;
+            
+        //     // 逐行写入每个元素
+        //     for (int num : vec) {
+        //         outFile << num << std::endl;
+        //     }
+            
+        //     outFile.close();
+        //     std::cout << "Vector has been written to " << filename << std::endl;
+        // }
+
+
     };
 };
 
