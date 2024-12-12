@@ -6,7 +6,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/debug/test/sz_pinterp_mquant_v3", // 可执行文件路径
-            "args": ["/home/zyang/Desktop/datasets/Uf48.bin.dat", "-3", "100","500","500","3", "1e-2","1e-3","1e-4","1","0","1","128",], // 传递给程序的命令行参数
+            "args": ["/home/zyang/Desktop/datasets/pressure_2000_1008x1008x352.f32.dat", "-3", "1008","1008","352","3", "1e-2","1e-3","1e-4","1","0","1","128",], // 传递给程序的命令行参数
             // "args": ["${workspaceFolder}/debug/Uf48.bin.dat", "-3", "100","500","500","1","1e-6","1","0","1","128",], // 传递给程序的命令行参数
             "cwd": "${workspaceFolder}",
             // "miDebuggerPath": "/usr/bin/lldb",  // 明确指定 LLDB 路径

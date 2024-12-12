@@ -604,12 +604,17 @@ namespace SZ3 {
 
 
     //    std::vector<int> bitgroup = {8, 8, 8, 2, 2, 2, 1, 1};
+    //    std::vector<int> bitgroup = {8, 8, 8,8};
+    //    std::vector<int> bitgroup = {32};
+
+    
 //TODO quantizati45on bins in different levels have different distribution.
 // a dynamic bitgroup should be used for each level
     //    std::vector<int> bitgroup = {16, 8, 4, 2, 1, 1};
-        // std::vector<int> bitgroup = {16, 8, 2, 2, 1, 1, 1, 1};
+        // std::vector<int> bitgroup = {16, 2, 2, 2, 2, 2, 2, 2, 2};
     //    std::vector<int> bitgroup = {4, 4, 4, 4, 4, 4, 4, 4,};
        std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    //    std::vector<int> bitgroup = {16, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2};
     //    std::vector<int> bitgroup = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
         std::vector<T> dec_delta;
         size_t retrieved_size = 0;
@@ -660,12 +665,14 @@ namespace SZ3 {
 
             // size_t quant_size;
             // read(quant_size, compressed_data_pos, length);
+            uint32_t pred_table = 0;
+            read(pred_table, compressed_data_pos, length);
 
             std::vector<int> quant_ind_truncated;
             if (bitgroup[bg] == 1) {
                 quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
-            } else if (bitgroup[bg] == 2) {
-                quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
+            // } else if (bitgroup[bg] == 2) {
+            //     quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
             } else {
                 encoder.load(compressed_data_pos, length);
                 quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
@@ -683,8 +690,13 @@ namespace SZ3 {
             for (int bb = 0; bb <= bg; bb++) {
                 bitshift -= bitgroup[bb];
             }
+            if(15 - bitshift > 0) {
+                invert_table(pred_table, quant_ind_truncated, 15 - bitshift);
+            }
             // std::cout << "------[Log] quant size = " << quant_size << std::endl;
             for (size_t i = 0; i < quant_size; i++) {
+
+
                 quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
                 // quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift)) - 0xaaaaaaaau;
 
@@ -718,15 +730,18 @@ namespace SZ3 {
             uchar *buffer = new uchar[size_t((quant_inds.size() < 1000000 ? 10 : 1.2)
                                              * quant_inds.size()) * sizeof(T)];
             {   // convert quant_inds to negabinary based
+                // int one_cnt = 0;
                 for (size_t i = 0; i < qsize; i++) {
                     quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
                     // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
-
+                    // one_cnt += (quant_inds[i] & (uint32_t)3) == (uint32_t)3;
                     
                     // quant_inds[i] += (1 << 15) - 1;
                 }
+                // double chance = one_cnt * 1.0 / quant_inds.size();
             }
-
+            uint32_t pred_table = predict_table();
+            convert_table(pred_table, quant_inds);
             double l2_error_base = 0;
             {   // calc the total l2 error
                 for (size_t i = 0; i < qsize; i++) {
@@ -782,11 +797,12 @@ namespace SZ3 {
 
                 // ---------------
                 // huffman && zstd
+                write(pred_table, buffer_pos);
                 if(quants.size() > 0){
                     if (bitgroup[b] == 1) {
                         encode_int_1bit(quants, buffer_pos);
-                    } else if (bitgroup[b] == 2) {
-                        encode_int_2bits(quants, buffer_pos);
+                    // } else if (bitgroup[b] == 2) {
+                    //     encode_int_2bits(quants, buffer_pos);
                     } else {
                         //TODO huffman tree is huge if using large radius on early levels
                         // set different radius for each level
@@ -1292,6 +1308,72 @@ namespace SZ3 {
                 break;
             }
             layers = ebs.size();
+        }
+
+        uint32_t predict_table() {
+            int cnt_zero_zero[15] = {0};
+            int cnt_zero_one[15] = {0};
+            int cnt_one_zero[15] = {0};
+            int cnt_one_one[15] = {0};
+            for(int i = 0; i < quant_inds.size(); i++) {
+                uint32_t qt = quant_inds[i] << 16;
+                
+                for(int b = 0; b < 16 - 1; b++){
+                    cnt_zero_zero[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0x00000000u;
+                    cnt_zero_one[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0x40000000u;
+                    cnt_one_zero[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0x80000000u;
+                    cnt_one_one[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0xc0000000u;
+                    qt = qt << 1;
+                }
+            }
+            uint32_t output = 0;
+            for(int b = 0; b < 15; b++) {
+                output = ((uint32_t)(cnt_zero_zero[b] < cnt_zero_one[b]) << (31 - b)) | output;
+            }
+            for(int b = 16; b < 31; b++) {
+                output = ((uint32_t)(cnt_one_zero[b - 16] < cnt_one_one[b - 16]) << (31 - b)) | output;
+            }
+            return output;
+        }
+
+        void convert_table(const uint32_t tab, std::vector<int>& quants) {
+            int sz = quants.size();
+            for(int i = 0; i < sz; i++){
+                uint32_t qt = quants[i];
+                for(int b = 15; b >= 1; b--){
+                    qt = ((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : (tab & (1 << (31 - b)))) ^ qt;
+                }
+                quants[i] = qt;
+            }
+        }
+
+        void invert_table(const uint32_t tab, std::vector<int>& quants) {
+            int sz = quants.size();
+            for(int i = 0; i < sz; i++){
+                uint32_t qt = quants[i];
+                for(int b = 1; b < 16; b++){
+                    qt = (qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : (tab & (1 << (31 - b))) ^ qt;
+                }
+                quants[i] = qt;
+            }
+        }
+
+        void invert_table(const uint32_t tab, std::vector<int>& quant_ind_truncated, int b) {
+            int sz = quant_ind_truncated.size();
+            std::vector<int> temp(sz, 0);
+            assert(sz == quant_inds.size());
+            for (size_t i = 0; i < sz; i++) {
+                    temp[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                    // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
+                    // one_cnt += (quant_inds[i] & (uint32_t)3) == (uint32_t)3;
+                    
+                    // quant_inds[i] += (1 << 15) - 1;
+            }
+
+            for(int i = 0; i < sz; i++){
+                uint32_t qt = temp[i];
+                quant_ind_truncated[i] = quant_ind_truncated[i] ^ (((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : (tab & (1 << (31 - b)))) >> (15 - b));
+            }
         }
     };
 };
