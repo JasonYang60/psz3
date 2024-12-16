@@ -72,7 +72,7 @@ namespace SZ3 {
             set_directions_and_stride(direction_id_);
 
             level_progressive = levels;
-
+            last_bit.resize(level_progressive * N);
             
         }
 
@@ -193,9 +193,9 @@ namespace SZ3 {
             auto cost = calcUncerntaintyBitGroup();
 
             for(int i = 0; i < layers; i++){
-                if(targetErrorBound >= ebs[i]){
+                if(targetErrorBound * 1.001 >= ebs[i]){
                     // throwawayBits = strategy(levelSize, (int)floor(targetErrorBound / ebs[i]) - 1);
-                    throwawayBits = strategy(valueTable, cost, (int)floor(targetErrorBound / ebs[i]) - 1);
+                    throwawayBits = strategy(valueTable, cost, (int)floor(targetErrorBound * 1.001 / ebs[i]) - 1);
                     for(int j = 0; j < lsize; j++){
                         // bitGroupOfLayer[i][j] =std::max(0, std::min(bsize - throwawayBits[j], bsize));
                         bitGroupOfLayer[i][j] = std::max(0, std::min(throwawayBits[j], bsize));
@@ -208,6 +208,12 @@ namespace SZ3 {
             return bitGroupOfLayer;
         }
 
+
+        /**
+         * 
+         * 
+         * 
+         */
         void *decompress(uchar const *lossless_data, T *data, T *dec_data,
                     std::vector<std::vector<int>> bitGroupOfLayer_new, 
                     std::vector<std::vector<int>> bitGroupOfLayer_old
@@ -399,17 +405,21 @@ namespace SZ3 {
                         quant_inds.clear();
                         quant_cnt = 0;
                         quant_inds.resize(quant_size, 0);
+                        last_bit[lid].resize(quant_size, 0);
+
                         if (bdelta[lid] > 0){
                             for (int b = bsum[lid]; b < bg_end; b++) {
                                 // l2_proj = l2_diff[lid * bsize + b];
 //                                    printf("projected l2 delta = %.10G\n", l2_diff[lid * bsize + b]);
                                 uchar const *bg_data = data_lb[lid * bsize + b];
                                 size_t bg_len = size_lb[lid * bsize + b];
-                                lossless_decode_bitgroup(b, bg_data, bg_len, quant_size);
+                                lossless_decode_bitgroup(b, bg_data, bg_len, quant_size, lid);
                                 // printf("--------[Log] bitGroup_len = %d\n", bg_len);
                             }
                         }
                         // level_cnt++; 
+
+                        
                     }
                     if(level_progressive == levels && lid == 0) // retrive
                     {
@@ -591,6 +601,7 @@ namespace SZ3 {
         std::vector<T> ebs;
         std::vector<std::string> interpolators;
         std::vector<int> quant_inds;
+        std::vector<std::vector<int>> last_bit;
         std::vector<T> error;
         std::vector<T> l2_diff;
         size_t quant_cnt = 0; // for decompress
@@ -623,7 +634,7 @@ namespace SZ3 {
         double max_error;
 //        T eb;
         void
-        lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size) {
+        lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size, int lid) {
             Timer timer(true);
 
             size_t length = data_length;
@@ -690,8 +701,20 @@ namespace SZ3 {
             for (int bb = 0; bb <= bg; bb++) {
                 bitshift -= bitgroup[bb];
             }
-            if(15 - bitshift > 0) {
-                invert_table(pred_table, quant_ind_truncated, 15 - bitshift);
+
+            /**
+             * b: 0 <= b <= 15
+             * ex.
+             *  0...0 0...0 00000000 000000b0
+             *    |     |   |              |
+             *    8     8   start here     b = 14 
+             * 
+             *  only in case: bitgroup = {16 1 1 ... 1}
+             */
+            int b = 15 - bitshift; 
+
+            if(b >= 0) {
+                invert_table(pred_table, quant_ind_truncated, b, lid);
             }
             // std::cout << "------[Log] quant size = " << quant_size << std::endl;
             for (size_t i = 0; i < quant_size; i++) {
@@ -1328,10 +1351,10 @@ namespace SZ3 {
             }
             uint32_t output = 0;
             for(int b = 0; b < 15; b++) {
-                output = ((uint32_t)(cnt_zero_zero[b] < cnt_zero_one[b]) << (31 - b)) | output;
+                output = ((uint32_t)(cnt_zero_zero[b] < cnt_zero_one[b]) << (30 - b)) | output;
             }
             for(int b = 16; b < 31; b++) {
-                output = ((uint32_t)(cnt_one_zero[b - 16] < cnt_one_one[b - 16]) << (31 - b)) | output;
+                output = ((uint32_t)(cnt_one_zero[b - 16] < cnt_one_one[b - 16]) << (30 - b)) | output;
             }
             return output;
         }
@@ -1341,7 +1364,7 @@ namespace SZ3 {
             for(int i = 0; i < sz; i++){
                 uint32_t qt = quants[i];
                 for(int b = 15; b >= 1; b--){
-                    qt = ((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : (tab & (1 << (31 - b)))) ^ qt;
+                    qt = ((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) ^ qt;
                 }
                 quants[i] = qt;
             }
@@ -1352,7 +1375,7 @@ namespace SZ3 {
             for(int i = 0; i < sz; i++){
                 uint32_t qt = quants[i];
                 for(int b = 1; b < 16; b++){
-                    qt = (qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : (tab & (1 << (31 - b))) ^ qt;
+                    qt = ((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) ^ qt;
                 }
                 quants[i] = qt;
             }
@@ -1372,8 +1395,20 @@ namespace SZ3 {
 
             for(int i = 0; i < sz; i++){
                 uint32_t qt = temp[i];
-                quant_ind_truncated[i] = quant_ind_truncated[i] ^ (((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : (tab & (1 << (31 - b)))) >> (15 - b));
+                quant_ind_truncated[i] = quant_ind_truncated[i] ^ (((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) >> (15 - b));
             }
+        }
+
+        void invert_table(const uint32_t tab, std::vector<int>& quant_ind_truncated, int b, int lid) {
+            int sz = quant_ind_truncated.size();
+            assert(sz == quant_inds.size());
+            
+            if(b > 0) {
+                for(int i = 0; i < sz; i++){
+                    quant_ind_truncated[i] = quant_ind_truncated[i] ^ ((last_bit[lid][i] ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) >> (15 - b));
+                }
+            }
+            last_bit[lid] = quant_ind_truncated;
         }
     };
 };
