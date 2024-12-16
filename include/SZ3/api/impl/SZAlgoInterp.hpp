@@ -4,6 +4,7 @@
 #include "SZ3/decomposition/InterpolationDecomposition.hpp"
 #include "SZ3/compressor/specialized/SZBlockInterpolationCompressor.hpp"
 #include "SZ3/quantizer/IntegerQuantizer.hpp"
+#include "SZ3/quantizer/NegabinaryQuantizer.hpp"
 #include "SZ3/lossless/Lossless_zstd.hpp"
 #include "SZ3/utils/Iterator.hpp"
 #include "SZ3/utils/Statistic.hpp"
@@ -11,7 +12,7 @@
 #include "SZ3/utils/QuantOptimizatioin.hpp"
 #include "SZ3/utils/Config.hpp"
 #include "SZ3/api/impl/SZAlgoLorenzoReg.hpp"
-#include "SZ3/encoder/RunlengthEncoder.hpp"
+#include "SZ3/encoder/BitplaneEncoder.hpp"
 #include <cmath>
 #include <memory>
 
@@ -24,8 +25,9 @@ namespace SZ3 {
         
         auto sz = make_compressor_sz_generic<T, N>(
             make_decomposition_interpolation<T, N>(conf,
-                                                   LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
-            RunlengthEncoder<int>(),
+                                                //    LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
+                                                   NegabinaryQuantizer<T>(conf.absErrorBound)),
+            BitplaneEncoder<int>(),
             Lossless_zstd());
         return sz->compress(conf, data, cmpData, cmpCap);
 //        return cmpData;
@@ -37,8 +39,10 @@ namespace SZ3 {
         auto cmpDataPos = cmpData;
         auto sz = make_compressor_sz_generic<T, N>(
             make_decomposition_interpolation<T, N>(conf,
-                                                   LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
-            RunlengthEncoder<int>(),
+                                                //    LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
+                                                   NegabinaryQuantizer<T>(conf.absErrorBound)),
+
+            BitplaneEncoder<int>(),
             Lossless_zstd());
         sz->decompress(conf, cmpDataPos, cmpSize, decData);
     }

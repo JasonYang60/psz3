@@ -61,6 +61,7 @@
         "variant": "cpp",
         "format": "cpp",
         "text_encoding": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "cassert": "cpp"
     }
 }
