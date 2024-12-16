@@ -11,6 +11,7 @@
 #include "SZ3/utils/QuantOptimizatioin.hpp"
 #include "SZ3/utils/Config.hpp"
 #include "SZ3/api/impl/SZAlgoLorenzoReg.hpp"
+#include "SZ3/encoder/RunlengthEncoder.hpp"
 #include <cmath>
 #include <memory>
 
@@ -24,7 +25,7 @@ namespace SZ3 {
         auto sz = make_compressor_sz_generic<T, N>(
             make_decomposition_interpolation<T, N>(conf,
                                                    LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
-            HuffmanEncoder<int>(),
+            RunlengthEncoder<int>(),
             Lossless_zstd());
         return sz->compress(conf, data, cmpData, cmpCap);
 //        return cmpData;
@@ -37,7 +38,7 @@ namespace SZ3 {
         auto sz = make_compressor_sz_generic<T, N>(
             make_decomposition_interpolation<T, N>(conf,
                                                    LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
-            HuffmanEncoder<int>(),
+            RunlengthEncoder<int>(),
             Lossless_zstd());
         sz->decompress(conf, cmpDataPos, cmpSize, decData);
     }

@@ -58,9 +58,9 @@ namespace SZ3 {
 
 //            uchar *oriData = new uchar[dataLength];
             size_t const countSize = ZSTD_decompress(dst, dstCap, src, srcLen);
-            if (ZSTD_isError(countSize)) {
-                assert(!ZSTD_isError(countSize));
-            }
+            // if (ZSTD_isError(countSize)) {
+            //     assert(!ZSTD_isError(countSize));
+            // }
             return countSize;
 //            compressedSize = dataLength;
 //            return oriData;

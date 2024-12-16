@@ -56,9 +56,8 @@ namespace SZ3 {
 
         void postprocess_decode() {};
 
-        uint save(uchar *&c) {
-            return 0;
-        };
+        void save(uchar *&c) {};
+
 
         void load(const uchar *&c, size_t &remaining_length) {};
 
