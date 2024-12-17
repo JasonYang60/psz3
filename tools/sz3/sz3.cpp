@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <cmath>
 #include "SZ3/api/sz.hpp"
-
+#include "SZ3/utils/Statistic.hpp"
 
 #define SZ_FLOAT 0
 #define SZ_DOUBLE 1
@@ -185,6 +185,99 @@ void decompress(char *inPath, char *cmpPath, char *decPath,
     printf("decompression time = %f seconds.\n", compress_time);
     printf("decompressed file = %s\n", outputFilePath);
 }
+
+template<class T>
+void compress_delta(char *inPath, char *cmpPath, SZ3::Config conf) {
+    T *data = new T[conf.num];
+    T* dataCopy = new T[conf.num];
+
+    SZ3::readfile<T>(inPath, conf.num, data);
+    std::vector<double> targetEB = {1e-2, 1e-3, 1e-4};
+    T range = SZ3::data_range(data, conf.num);
+    memcpy(dataCopy, data, conf.num * sizeof(T));
+    for(int i = 0; i < targetEB.size(); i++) {
+        conf.relErrorBound = targetEB[i];
+        conf.absErrorBound = conf.relErrorBound * range;
+        conf.errorBoundMode = SZ3::EB_ABS;
+        
+        size_t outSize;
+        SZ3::Timer timer(true);
+        char *bytes = SZ_compress<T>(conf, data, outSize);
+        double compress_time = timer.stop();
+
+        char outputFilePath[1024];
+        if (cmpPath == nullptr) {
+            snprintf(outputFilePath, 1024, "%s.sz", inPath);
+        } else {
+            // strcpy(outputFilePath, cmpPath);
+            sprintf(outputFilePath, "%s.%d", cmpPath, i);
+        }
+        SZ3::writefile(outputFilePath, bytes, outSize);
+
+        printf("compression ratio = %.2f \n", conf.num * 1.0 * sizeof(T) / outSize);
+        printf("compression time = %f\n", compress_time);
+        printf("compressed data file = %s\n\n", outputFilePath);
+
+        for(int i = 0; i < conf.num; i++) {
+            dataCopy[i] -= data[i];
+            data[i] = dataCopy[i];
+        }
+        delete[]bytes;
+    }
+
+    delete[]data;
+}
+
+template<class T>
+void decompress_delta(char *inPath, char *cmpPath, char *decPath,
+                SZ3::Config conf,
+                int binaryOutput, int printCmpResults) {
+
+    char outputFilePath[1024];
+    T* totalData = new T[conf.num];
+    memset(totalData, 0, sizeof(T) * conf.num);
+    for(int i = 0; i < 3; i++) {
+        sprintf(outputFilePath, "%s.%d", cmpPath, i);
+        {
+            size_t cmpSize;
+            auto cmpData = SZ3::readfile<char>(outputFilePath, cmpSize);
+
+            SZ3::Timer timer(true);
+            T *decData = SZ_decompress<T>(conf, cmpData.get(), cmpSize);
+            double compress_time = timer.stop();
+
+            char outputFilePath[1024];
+            if (decPath == nullptr) {
+                snprintf(outputFilePath, 1024, "%s.out", outputFilePath);
+            } else {
+                strcpy(outputFilePath, decPath);
+            }
+            if (binaryOutput == 1) {
+                SZ3::writefile<T>(outputFilePath, decData, conf.num);
+            } else {
+                SZ3::writeTextFile<T>(outputFilePath, decData, conf.num);
+            }
+            if (printCmpResults) {
+                //compute the distortion / compression errors...
+                size_t totalNbEle;
+                auto ori_data = SZ3::readfile<T>(inPath, totalNbEle);
+                for(int i = 0; i < conf.num; i++) {
+                    totalData[i] += decData[i];
+                }
+                assert(totalNbEle == conf.num);
+                SZ3::verify<T>(ori_data.get(), totalData, conf.num);
+            }
+            delete[]decData;
+
+            printf("retrieved size = %lld bytes\n", (long long int)cmpSize);
+            printf("retrieved ratio = %f \%\n", cmpSize * 100.0 / (conf.num * sizeof(T)));
+            // printf("compression ratio = %f\n", conf.num * sizeof(T) * 1.0 / cmpSize);
+            printf("decompression time = %f seconds.\n", compress_time);
+            printf("decompressed file = %s\n\n", outputFilePath);
+        }
+    }
+}
+
 
 int main(int argc, char *argv[]) {
     bool binaryOutput = true;
@@ -456,7 +549,7 @@ int main(int argc, char *argv[]) {
     if (compression) {
 
         if (dataType == SZ_FLOAT) {
-            compress<float>(inPath, cmpPath, conf);
+            compress_delta<float>(inPath, cmpPath, conf);
         } else if (dataType == SZ_DOUBLE) {
             compress<double>(inPath, cmpPath, conf);
         } else if (dataType == SZ_INT32) {
@@ -476,7 +569,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (dataType == SZ_FLOAT) {
-            decompress<float>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
+            decompress_delta<float>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
         } else if (dataType == SZ_DOUBLE) {
             decompress<double>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
         } else if (dataType == SZ_INT32) {

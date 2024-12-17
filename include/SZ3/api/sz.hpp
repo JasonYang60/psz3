@@ -50,7 +50,7 @@ conf.absErrorBound = 1E-3; // absolute error bound 1e-3
 char *compressedData = SZ_compress(conf, data, outSize);
  */
 template<class T>
-size_t SZ_compress(const SZ3::Config &conf_, const T *data, char *cmpData, size_t cmpCap) {
+size_t SZ_compress(const SZ3::Config &conf_, T *data, char *cmpData, size_t cmpCap) {
     using namespace SZ3;
     Config conf(conf_);
     
@@ -83,7 +83,7 @@ size_t SZ_compress(const SZ3::Config &conf_, const T *data, char *cmpData, size_
 }
 
 template<class T>
-char *SZ_compress(const SZ3::Config &conf, const T *data, size_t &cmpSize) {
+char *SZ_compress(const SZ3::Config &conf, T *data, size_t &cmpSize) {
     using namespace SZ3;
     
     size_t bufferLen = conf.num * sizeof(T) * 1.2;
