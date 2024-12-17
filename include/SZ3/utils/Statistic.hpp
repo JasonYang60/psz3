@@ -132,7 +132,7 @@ namespace SZ3 {
 
         printf("Min=%.20G, Max=%.20G, range=%.20G\n", Min, Max, range);
         printf("Max absolute error = %.2G\n", max_diff);
-        printf("Max relative error = %.2G\n", max_diff / (Max - Min));
+        printf("Max relative error = %.7f\n", max_diff / (Max - Min));
         printf("Max pw relative error = %.2G\n", maxpw_relerr);
         printf("PSNR = %f, NRMSE= %.10G\n", psnr, nrmse);
         printf("normError = %f, normErr_norm = %f\n", normErr, normErr_norm);

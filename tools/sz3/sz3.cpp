@@ -187,12 +187,11 @@ void decompress(char *inPath, char *cmpPath, char *decPath,
 }
 
 template<class T>
-void compress_delta(char *inPath, char *cmpPath, SZ3::Config conf) {
+void compress_delta(char *inPath, char *cmpPath, SZ3::Config conf, const std::vector<double> &targetEB) {
     T *data = new T[conf.num];
     T* dataCopy = new T[conf.num];
 
     SZ3::readfile<T>(inPath, conf.num, data);
-    std::vector<double> targetEB = {1e-2, 1e-3, 1e-4};
     T range = SZ3::data_range(data, conf.num);
     memcpy(dataCopy, data, conf.num * sizeof(T));
     for(int i = 0; i < targetEB.size(); i++) {
@@ -231,12 +230,12 @@ void compress_delta(char *inPath, char *cmpPath, SZ3::Config conf) {
 template<class T>
 void decompress_delta(char *inPath, char *cmpPath, char *decPath,
                 SZ3::Config conf,
-                int binaryOutput, int printCmpResults) {
+                int binaryOutput, int printCmpResults, int targetEBsize) {
 
     char outputFilePath[1024];
     T* totalData = new T[conf.num];
     memset(totalData, 0, sizeof(T) * conf.num);
-    for(int i = 0; i < 3; i++) {
+    for(int i = 0; i < targetEBsize; i++) {
         sprintf(outputFilePath, "%s.%d", cmpPath, i);
         {
             size_t cmpSize;
@@ -270,7 +269,7 @@ void decompress_delta(char *inPath, char *cmpPath, char *decPath,
             delete[]decData;
 
             printf("retrieved size = %lld bytes\n", (long long int)cmpSize);
-            printf("retrieved ratio = %f \%\n", cmpSize * 100.0 / (conf.num * sizeof(T)));
+            printf("retrieved ratio = %.3f %%\n", cmpSize * 100.0 / (conf.num * sizeof(T)));
             // printf("compression ratio = %f\n", conf.num * sizeof(T) * 1.0 / cmpSize);
             printf("decompression time = %f seconds.\n", compress_time);
             printf("decompressed file = %s\n\n", outputFilePath);
@@ -311,6 +310,11 @@ int main(int argc, char *argv[]) {
     if (argc == 1)
         usage();
     int width = -1;
+
+    std::vector<double> targetEB;
+    int targetEBsize = 0;
+
+    bool delta = 0;
 
     for (i = 1; i < argc; i++) {
         if (argv[i][0] != '-' || argv[i][2]) {
@@ -451,6 +455,14 @@ int main(int argc, char *argv[]) {
                     usage();
                 psnrErrorBound = argv[i];
                 break;
+            case 'e':
+                targetEBsize = atoi(argv[++i]);
+                delta = true;
+                for (int j = 0; j < targetEBsize; j++) {
+                    targetEB.push_back(atof(argv[++i]));
+                }
+                break;
+            
             default:
                 usage();
                 break;
@@ -547,40 +559,73 @@ int main(int argc, char *argv[]) {
     }
 
     if (compression) {
-
-        if (dataType == SZ_FLOAT) {
-            compress_delta<float>(inPath, cmpPath, conf);
-        } else if (dataType == SZ_DOUBLE) {
-            compress<double>(inPath, cmpPath, conf);
-        } else if (dataType == SZ_INT32) {
-            compress<int32_t>(inPath, cmpPath, conf);
-        } else if (dataType == SZ_INT64) {
-            compress<int64_t>(inPath, cmpPath, conf);
+        if(delta) {
+            if (dataType == SZ_FLOAT) {
+                compress_delta<float>(inPath, cmpPath, conf, targetEB);
+            } else if (dataType == SZ_DOUBLE) {
+                compress_delta<double>(inPath, cmpPath, conf, targetEB);
+            } else if (dataType == SZ_INT32) {
+                compress_delta<int32_t>(inPath, cmpPath, conf, targetEB);
+            } else if (dataType == SZ_INT64) {
+                compress_delta<int64_t>(inPath, cmpPath, conf, targetEB);
+            } else {
+                printf("Error: data type not supported \n");
+                usage();
+                exit(0);
+            }
         } else {
-            printf("Error: data type not supported \n");
-            usage();
-            exit(0);
+            if (dataType == SZ_FLOAT) {
+                compress<float>(inPath, cmpPath, conf);
+            } else if (dataType == SZ_DOUBLE) {
+                compress<double>(inPath, cmpPath, conf);
+            } else if (dataType == SZ_INT32) {
+                compress<int32_t>(inPath, cmpPath, conf);
+            } else if (dataType == SZ_INT64) {
+                compress<int64_t>(inPath, cmpPath, conf);
+            } else {
+                printf("Error: data type not supported \n");
+                usage();
+                exit(0);
+            }
         }
+        
     }
     if (decompression) {
         if (printCmpResults && inPath == nullptr) {
             printf("Error: Since you add -a option (analysis), please specify the original data path by -i <path>.\n");
             exit(0);
         }
-
-        if (dataType == SZ_FLOAT) {
-            decompress_delta<float>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
-        } else if (dataType == SZ_DOUBLE) {
-            decompress<double>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
-        } else if (dataType == SZ_INT32) {
-            decompress<int32_t>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
-        } else if (dataType == SZ_INT64) {
-            decompress<int64_t>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
+        if(delta) {
+            if (dataType == SZ_FLOAT) {
+                decompress_delta<float>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults, targetEBsize);
+            } else if (dataType == SZ_DOUBLE) {
+                decompress_delta<double>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults, targetEBsize);
+            } else if (dataType == SZ_INT32) {
+                decompress_delta<int32_t>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults, targetEBsize);
+            } else if (dataType == SZ_INT64) {
+                decompress_delta<int64_t>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults, targetEBsize);
+            } else {
+                printf("Error: data type not supported \n");
+                usage();
+                exit(0);
+            }
         } else {
-            printf("Error: data type not supported \n");
-            usage();
-            exit(0);
+            if (dataType == SZ_FLOAT) {
+                decompress<float>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
+            } else if (dataType == SZ_DOUBLE) {
+                decompress<double>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
+            } else if (dataType == SZ_INT32) {
+                decompress<int32_t>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
+            } else if (dataType == SZ_INT64) {
+                decompress<int64_t>(inPath, cmpPath, decPath, conf, binaryOutput, printCmpResults);
+            } else {
+                printf("Error: data type not supported \n");
+                usage();
+                exit(0);
+            }
+
         }
+
     }
     if (delCmpPath) {
         remove(cmpPath);

@@ -82,8 +82,8 @@ namespace SZ3 {
         nrmse = sqrt(mse) / range;
 
         printf("min=%.20G, max=%.20G, range=%.20G\n", min, max, range);
-        printf("max absolute error = %.2G\n", max_err);
-        printf("max relative error = %.2G\n", max_err / (max - min));
+        printf("max absolute error = %f\n", max_err);
+        printf("max relative error = %f\n", max_err / (max - min));
         printf("max pw relative error = %.2G\n", maxpw_relerr);
         printf("PSNR = %f, NRMSE= %.10G L2Error= %.10G\n", psnr, nrmse, l2_err);
     }
@@ -144,7 +144,7 @@ namespace SZ3 {
 
         printf("[Verify]L2 error = %.10G\n", l2_err);
         printf("[Verify]Min=%.20G, Max=%.20G, range=%.20G\n", Min, Max, range);
-        printf("[Verify]Max absolute error = %.4g, idx = %d\n", max_err, (int)max_err_idx);
+        printf("[Verify]Max absolute error = %.7f, idx = %d\n", max_err, (int)max_err_idx);
 //        printf("Max relative error = %.2G\n", max_err / (Max - Min));
 //        printf("Max pw relative error = %.2G\n", maxpw_relerr);
         printf("[Verify]PSNR = %f, NRMSE= %.10G\n", psnr, nrmse);

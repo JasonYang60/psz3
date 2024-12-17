@@ -9,8 +9,8 @@
             // "args": ["/home/zyang/Desktop/datasets/pressure_2000_1008x1008x352.f32.dat", "-3", "1008","1008","352","1","1e-4","1","0","99","128",], // 传递给程序的命令行参数
             // "args": ["/home/zyang/Desktop/datasets/Uf48.bin.dat", "-3", "100","500","500","1","5e-4","1","0","1","128",], // 传递给程序的命令行参数
             // "args": ["/home/zyang/Desktop/datasets/einspline_288_115_69_69.pre.f32.dat", "-4", "288","115","69","69", "3","1e-2","1e-3","1e-4","1","0","3","128",], // 传递给程序的命令行参数
-            "args": ["-f", "-i", "${workspaceFolder}/debug/Uf48.bin.dat", "-o","${workspaceFolder}/debug/Uf48.bin.dat.sz.out", "-3", "500","500", "100","-c", "${workspaceFolder}/debug/sz3_cubic_direction0.config", 
-                    "-M", "REL", "1e-6", "-a"], // 传递给程序的命令行参数
+            "args": ["-f", "-i", "/home/zyang/Desktop/datasets/Uf48.bin.dat", "-o","/home/zyang/Desktop/datasets/Uf48.bin.dat.sz.out", "-3", "500","500", "100","-c", "${workspaceFolder}/debug/sz3.config", 
+                    "-M", "REL", "1e-6", "-a", "-e", "2", "1e-2", "1e-7"], // 传递给程序的命令行参数
             "cwd": "${workspaceFolder}",
             // "miDebuggerPath": "/usr/bin/lldb",  // 明确指定 LLDB 路径
             "preLaunchTask": "build", // 调试前自动执行的任务（如编译任务）
