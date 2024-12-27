@@ -210,16 +210,7 @@ namespace SZ3 {
                 result ^= (((last & 1) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) >> (15 - b));
             }
         }
-        // void invert_table(const uint32_t tab, std::vector<int>& quant_ind_truncated, int b) {
-        //     int sz = quant_ind_truncated.size();
-        //     assert(sz == quant_inds.size());
-            
-        //     if(b > 0) {
-        //         for(int i = 0; i < sz; i++){
-        //             quant_ind_truncated[i] = quant_ind_truncated[i] ^ ((last_bit[lid][i] ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) >> (15 - b));
-        //         }
-        //     }
-        // }
+
     };
 }
 #endif

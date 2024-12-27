@@ -247,7 +247,13 @@ void decompress_delta(char *inPath, char *cmpPath, char *decPath,
 
             char outputFilePath[1024];
             if (decPath == nullptr) {
-                snprintf(outputFilePath, 1024, "%s.out", outputFilePath);
+                char tmp[1024];
+                strncpy(tmp, outputFilePath, sizeof(tmp) - 1);
+                // Make sure tmp is null-terminated
+                tmp[sizeof(tmp) - 1] = '\0';
+
+                snprintf(outputFilePath, 1024, "%s.out", tmp);
+
             } else {
                 strcpy(outputFilePath, decPath);
             }

@@ -115,7 +115,7 @@ namespace SZ3 {
             std::vector<size_t> levelSize(lsize, 0);
             std::vector<size_t> lossless_size;
             uchar const * cmp_data_pos = nullptr;
-            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos, false, false);
 
             lossless_size.erase(lossless_size.begin());
             // lossless_size.erase(lossless_size.end());
@@ -130,13 +130,14 @@ namespace SZ3 {
             return decompress(lossless_data, data, dec_data, bitGroupOfLayer_new, bitGroupOfLayer_old);
         }
 
-        void loadcfg(uchar const *lossless_data, 
+        void loadcfg(uchar const * const lossless_data, 
                     std::vector<size_t> &levelSize,
                     std::vector<size_t> &lossless_size, 
-                    uchar const * &cmp_data_pos
+                    uchar const * &cmp_data_pos,
+                    bool load_unpred, 
+                    bool clear_unpred
                     ) {
-
-            quantizer.postdecompress_data();
+            if(clear_unpred) {quantizer.postdecompress_data(); }            
 
             uchar const *buffer = lossless_data;
             //load lossless_size
@@ -157,6 +158,7 @@ namespace SZ3 {
             levelSize.clear();
             levelSize.resize(N * level_progressive, 0);
             read(levelSize.data(), levelSize.size(), buffer, buffer_len);
+            if(load_unpred)
             {   // load unpredictable data
                 {   // mv buffer pointer to the address of unpredictable data
                     buffer = lossless_data;         // ???
@@ -164,6 +166,7 @@ namespace SZ3 {
                         buffer += lossless_size[i];
                     }
                     buffer_len = lossless_size[lossless_size.size() - 1];
+                    printf("[Log] unpred size = %lld\n", (long long int)buffer_len);
                     retrieved_size += buffer_len;
                 }
                 size_t rSize = lossless.getFrameConteneSize(buffer, buffer_len);
@@ -232,12 +235,15 @@ namespace SZ3 {
                     bitGroupOfLayer_diff[i][j] = bitGroupOfLayer_new[i][j] - bitGroupOfLayer_old[i][j];
                 }
             }
-            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
+            loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos, false, false);
 
             size_t compressed_size = 0;
             if(!allzero(bitGroupOfLayer_diff[0])){
                 
                 bool update = !allzero(bitGroupOfLayer_old[0]);
+                if(!update) {
+                    loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos, true, true);
+                }
                 bsum = bitGroupOfLayer_old[0];
                 bdelta = bitGroupOfLayer_diff[0];
                 compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, update);
@@ -258,25 +264,28 @@ namespace SZ3 {
                     bsum.resize(lsize, 0);
                     
                     bool update = !allzero(bitGroupOfLayer_old[layer]);
+                    bool skip = allzero(bitGroupOfLayer_diff[layer]);
                     bsum = bitGroupOfLayer_old[layer];
 
                     bdelta.clear();
                     bdelta.resize(lsize, bsize);
                     bdelta = bitGroupOfLayer_diff[layer];
-                    loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos);
-                    if(allzero(bitGroupOfLayer_diff[layer])){ // bitGroupOfLayer uninitialized at this layer
+
+                    if(skip || update) {
+                        loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos, false, false);
+                    } else {
+                        loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos, true, true);
+                    }
+                    if(skip){ // bitGroupOfLayer uninitialized at this layer
                         compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
                         lossless_data_pos += compressed_size;
                         std::cout << "[log]skipping layer " << layer << std::endl;
                     } else {
+
+
                         compressed_size = decompress(lossless_data_pos, residual_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, update);
                         lossless_data_pos += compressed_size;
-                        // {
-                        //     T a = dec_data[4823183];
-                        //     T b = residual_data[4823183];
-                        //     T c = data[4823183];
-                        //     T z = a + b;
-                        // }
+
                         for (size_t i = 0; i < num_elements; i++){
                             dec_data[i] += residual_data[i];
                         }

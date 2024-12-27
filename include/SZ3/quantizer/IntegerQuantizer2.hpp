@@ -177,10 +177,6 @@ namespace SZ3 {
 
         }
 
-        bool topINDEXofstack(size_t idx){
-            return !unpred_idx.empty() && unpred_idx.back() == idx;
-        }
-
 
         void setunpred(T *data) {
             for (size_t i = 0; i < num; i++) {
@@ -208,7 +204,6 @@ namespace SZ3 {
             unpred_idx.clear();
             unpred_map.clear();
             unpred_val.clear();
-            isunpred.clear();
             isunpred.clear();
         };
 
