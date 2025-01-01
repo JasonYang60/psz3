@@ -379,8 +379,8 @@ namespace SZ3 {
                 }
                 printf("\n");
             }
-            Timer timer(true);
-            timer.start();
+            // Timer timer(true);
+            // timer.start();
             bool retrive = true;
             {   // retrive = if elements in bsum are all zeros
                 for(auto i : bsum){
@@ -466,7 +466,7 @@ namespace SZ3 {
             //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
             //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             // }
-            std::cout << "decompress time = " << timer.stop() << std::endl;
+            // std::cout << "decompress time = " << timer.stop() << std::endl;
             return dec_data;
         }
 
