@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <omp.h>
 
 #include "SZ3/def.hpp"
 
@@ -393,6 +394,127 @@ std::vector<int> decode_int_2bits(const uchar *&c, size_t &remaining_length) {
     return ints;
 }
 
+// inline void encode_int_1bit(const std::vector<int> &data, unsigned char *&c)
+// {
+//     size_t intLen  = data.size();
+//     size_t byteLen = (intLen + 7) / 8; // 向上取整
+
+//     // 1) 清空要写的字节区间 (确保后续 |= 不会干扰)
+//     memset(c, 0, byteLen);
+
+// #pragma omp parallel
+//     {
+//         int tid = omp_get_thread_num();
+//         int nt  = omp_get_num_threads();
+        
+//         // 均匀分段
+//         size_t chunkSize = (intLen + nt - 1) / nt; // 向上取整
+//         size_t start     = tid * chunkSize;
+//         size_t end       = (tid + 1) * chunkSize;
+//         if (end > intLen) end = intLen;
+
+//         // 本线程只负责 [start, end)
+//         for (size_t i = start; i < end; i++) {
+//             size_t idx = i >> 3;
+//             size_t bit = 7 - (i & 7);
+//             c[idx] |= (data[i] & 1) << bit;
+//         }
+//     }
+
+//     c += byteLen;
+// }
+
+char* splitIntoBitPlanesToBuffer(const std::vector<int32_t>& input,
+                                 size_t& outBufferSize)
+{
+    size_t n = input.size();
+    if (n == 0)
+    {
+        outBufferSize = 0;
+        return nullptr;
+    }
+
+    // 计算每个平面需要的 32-bit 块数量 (向上取整)
+    size_t blocksPerPlane = (n + 31) / 32;
+    // 总字节数 = 32 (平面数) * blocksPerPlane * 4
+    outBufferSize = 32 * blocksPerPlane * sizeof(uint32_t);
+
+    // 分配并清空内存
+    char* buffer = new char[outBufferSize];
+    std::memset(buffer, 0, outBufferSize);
+
+    // 遍历所有元素
+    for (size_t i = 0; i < n; ++i)
+    {
+        // 当前元素(以无符号形式看待其补码位)
+        uint32_t val = static_cast<uint32_t>(input[i]);
+
+        // 计算 block 下标 和 bit 偏移
+        size_t blockIdx  = i >> 5; // i / 32
+        size_t bitOffset = i & 31; // i % 32
+
+        // 将第 b 位 bit 放到 plane[b][blockIdx] 的 bitOffset 上
+        for (int b = 0; b < 32; ++b)
+        {
+            uint32_t bit = (val >> b) & 1U;
+
+            // 找到第 b 个平面的起始位置
+            size_t planeOffsetBytes = static_cast<size_t>(b) * blocksPerPlane * sizeof(uint32_t);
+
+            // planeBuffer 指向第 b 个平面的首地址 (转换为 uint32_t*)
+            uint32_t* planeBuffer = reinterpret_cast<uint32_t*>(buffer + planeOffsetBytes);
+
+            // 写入该平面的 blockIdx
+            planeBuffer[blockIdx] |= (bit << bitOffset);
+        }
+    }
+
+    return buffer;
+}
+
+uchar* bitTranspose8(std::vector<int32_t> &in)
+{
+    if (in.size() % 8 != 0) {
+        int res = 8 - in.size() % 8;
+        for(int i = 0; i < res; i++) {in.push_back(0); }
+    }
+
+    const size_t blockSize = 8;     
+    const size_t bitsPerInt = 32;   
+    size_t nBlocks = in.size() / blockSize;
+
+    uchar* out = new uchar[nBlocks * bitsPerInt];
+    #pragma omp parallel for
+    for (size_t b = 0; b < nBlocks; b++) {
+        size_t baseIn = b * blockSize;
+        size_t baseOut = b * bitsPerInt;
+
+        int in_0 = in[baseIn + 0];
+        int in_1 = in[baseIn + 1];
+        int in_2 = in[baseIn + 2];
+        int in_3 = in[baseIn + 3];
+        int in_4 = in[baseIn + 4];
+        int in_5 = in[baseIn + 5];
+        int in_6 = in[baseIn + 6];
+        int in_7 = in[baseIn + 7];
+
+        for(int bit = 0; bit < bitsPerInt; bit++){
+            out[bit * nBlocks + b] = ((in_0 & 1u) << 7) | ((in_1 & 1u) << 6) | ((in_2 & 1u) << 5) | ((in_3 & 1u) << 4)
+                | ((in_4 & 1u) << 3) | ((in_5 & 1u) << 2) | ((in_6 & 1u) << 1) | ((in_7 & 1u));
+            
+            in_0 >>= 1;
+            in_1 >>= 1;
+            in_2 >>= 1;
+            in_3 >>= 1;
+            in_4 >>= 1;
+            in_5 >>= 1;
+            in_6 >>= 1;
+            in_7 >>= 1;
+        }
+    }
+
+    return out;
+}
 
 inline void encode_int_1bit(const std::vector<int> &data, uchar *&c) {
 
@@ -404,7 +526,9 @@ inline void encode_int_1bit(const std::vector<int> &data, uchar *&c) {
 
     size_t b, i = 0;
     int mod8 = intLen % 8;
-    for (b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++, i += 8) {
+    #pragma omp parallel for
+    for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
+        size_t i = b * 8; 
         c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4)
                 | (data[i + 4] << 3) | (data[i + 5] << 2) | (data[i + 6] << 1) | (data[i + 7]);
     }

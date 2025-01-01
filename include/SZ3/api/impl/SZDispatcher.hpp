@@ -25,7 +25,7 @@ namespace SZ3 {
             return SZ_compress_LorenzoReg<T, N>(conf, data, cmpData, cmpCap);
         } else if (conf.cmprAlgo == ALGO_INTERP) {
             // return SZ_compress_Interp<T, N>(conf, data, cmpData, cmpCap);
-            return SZ_compress_Interp_nega_corel<T, N>(conf, data, cmpData, cmpCap);
+            return SZ_compress_Interp<T, N>(conf, data, cmpData, cmpCap);
         } else if (conf.cmprAlgo == ALGO_INTERP_LORENZO) {
             return SZ_compress_Interp_lorenzo<T, N>(conf, data, cmpData, cmpCap);
         } else if (conf.cmprAlgo == ALGO_NOPRED) {

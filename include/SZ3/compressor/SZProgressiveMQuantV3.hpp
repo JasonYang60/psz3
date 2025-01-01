@@ -317,7 +317,7 @@ namespace SZ3 {
 
             // size_t level_cnt = 0;
 
-            Timer timer(true);
+            // Timer timer(true);
             //load non-progressive levels
             int lossless_id = 1;        // ???
             lossless_data += lossless_size[0];
@@ -471,6 +471,7 @@ namespace SZ3 {
         }
 
         uchar *compress(T *data, size_t & compressed_size) {
+            // Timer time(true);
             setupLayers(data);
             uchar *lossless_data = new uchar[size_t((num_elements < 1000000 ? 100 : 2.0) * num_elements) * sizeof(T)]; //?
             uchar * lossless_data_pos = lossless_data;
@@ -548,6 +549,9 @@ namespace SZ3 {
 
             timer.start();
             
+            
+            Timer timer2(true);
+            double totalTime = 0;
             for (uint level = level_progressive; level > 0; level--) {
 
 //                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
@@ -563,7 +567,10 @@ namespace SZ3 {
                     auto quant_size = quant_inds.size();
                     quant_inds_total += quant_size;
                     write(quant_size, levelSize_pos);
+
+                    timer2.start();
                     auto size = encode_lossless_bitplane((level_progressive - level) * N + d, lossless_data_pos, lossless_size, eb);
+                    totalTime += timer2.stop();
                     // printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
                     //        level, d, quant_size, size, timer.stop());
 
@@ -573,6 +580,7 @@ namespace SZ3 {
 //            quant_inds.clear();
             std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
             std::cout << "compress time = " << timer.stop() << std::endl;
+            std::cout << "total time = " << totalTime << std::endl;
             assert(quant_inds_total >= num_elements);
 
             // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
@@ -609,7 +617,7 @@ namespace SZ3 {
         T range = 0;
         std::vector<T> ebs;
         std::vector<std::string> interpolators;
-        std::vector<int> quant_inds;
+        std::vector<int32_t> quant_inds;
         std::vector<std::vector<int>> last_bit;
         std::vector<T> error;
         std::vector<T> l2_diff;
@@ -645,51 +653,27 @@ namespace SZ3 {
 //        T eb;
         void
         lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size, int lid) {
-            Timer timer(true);
+            // Timer timer(true);
 
             size_t length = data_length;
             retrieved_size += length;
             if (length == 0) {return; }
-            // artimetic
-            // ---------------
-            
-            // zstd
-            // size_t rSize = lossless.getFrameConteneSize(data_pos, length);
-            // uchar *compressed_data = new uchar[rSize];
-            // length = lossless.decompress(data_pos, length, compressed_data, rSize);
 
-            //
-            // uchar *compressed_data = new uchar[length];
-            // memcpy(compressed_data, data_pos, length);
-            // std::vector<int> quant_ind_truncated;
-            // uchar const *compressed_data_pos = compressed_data;
-            // encoder.load(compressed_data_pos, length);
-            // quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
-            // encoder.postprocess_decode();
+            uint32_t pred_table_0 = 0;
+            uint32_t pred_table_1 = 0;
+            read(pred_table_0, data_pos, length);
+            read(pred_table_1, data_pos, length);
 
+            size_t rSize = lossless.getFrameConteneSize(data_pos, length);
+            uchar * compressed_data = new uchar[rSize];
+            length = lossless.decompress(data_pos, length, compressed_data, rSize);
 
-            // artimetic ends
-            // ---------------
-            
-            // huffman && zstd
-            // ---------------
-            uchar * compressed_data = nullptr;
-            if (quant_size < 128 && bitgroup[bg] == 1) {
-                compressed_data = new uchar[length];
-                memcpy(compressed_data, data_pos, length);
-            } else {
-                size_t rSize = lossless.getFrameConteneSize(data_pos, length);
-                compressed_data = new uchar[rSize];
-                length = lossless.decompress(data_pos, length, compressed_data, rSize);
-            }
             uchar const *compressed_data_pos = compressed_data;
 
             // size_t quant_size;
             // read(quant_size, compressed_data_pos, length);
-            uint32_t pred_table_0 = 0;
-            uint32_t pred_table_1 = 0;
-            read(pred_table_0, compressed_data_pos, length);
-            read(pred_table_1, compressed_data_pos, length);
+
+            
 
             std::vector<int> quant_ind_truncated;
             if (bitgroup[bg] == 1) {
@@ -764,106 +748,86 @@ namespace SZ3 {
 
             uchar *buffer = new uchar[size_t((quant_inds.size() < 1000000 ? 10 : 1.2)
                                              * quant_inds.size()) * sizeof(T)];
-            {   // convert quant_inds to negabinary based
-                // int one_cnt = 0;
-                for (size_t i = 0; i < qsize; i++) {
-                    quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
-                    // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
-                    // one_cnt += (quant_inds[i] & (uint32_t)3) == (uint32_t)3;
+
+            timer.start();      
+            double totalTime = 0;     
+            // {   // convert quant_inds to negabinary based
+            //     // int one_cnt = 0;
+            //     // timer.start();
+            //     for (size_t i = 0; i < qsize; i++) {
+            //         quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+            //         // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
+            //         // one_cnt += (quant_inds[i] & (uint32_t)3) == (uint32_t)3;
                     
-                    // quant_inds[i] += (1 << 15) - 1;
-                }
-                // double chance = one_cnt * 1.0 / quant_inds.size();
-            }
+            //         // quant_inds[i] += (1 << 15) - 1;
+            //     }
+            //     // double chance = one_cnt * 1.0 / quant_inds.size();
+            //     // std::cout << "nega binary transformation time: " << timer.stop() << std::endl;
+            // }
+
+            // timer.start();
             uint32_t pred_table_0 = 0;
             uint32_t pred_table_1 = 0;
+
             predict_table(pred_table_0, pred_table_1);
+            // std::cout << "bit prediction time: " << timer.stop() << std::endl;
+
+            // timer.start();
             convert_table(pred_table_0, pred_table_1, quant_inds);
+            // std::cout << "bit convertion time: " << timer.stop() << std::endl;
+            totalTime += timer.stop();
+
             double l2_error_base = 0;
             {   // calc the total l2 error
-                for (size_t i = 0; i < qsize; i++) {
-                    if(i < error.size()) {
-                        // l2_error_base += error[i] * error[i];
-                    }
-                }
+                // for (size_t i = 0; i < qsize; i++) {
+                //     if(i < error.size()) {
+                //         // l2_error_base += error[i] * error[i];
+                //     }
+                // }
                 // printf("l2 = %.10G \n", l2_error_base);
             }
             size_t total_size = 0;
             int shift = 0;
-            for (int b = bsize - 1; b >= 0; b--) {
-                timer.start();
+
+            size_t bitPlane_size = 0;
+            uchar* buffer_bp = bitTranspose8(quant_inds);
+
+            int numofEachBitPlane = (qsize + 7) / 8;
+            // for (int b = bsize - 1; b >= 0; b--) {
+            for (int b = 0; b < bsize; b++) {
+                // timer.start();
                 uchar *buffer_pos = buffer;
+                uchar *buffer_bp_pos = buffer_bp + b * numofEachBitPlane;
                 // write((size_t) qsize, buffer_pos);
 
                 double l2_error = 0;
-                for (size_t i = 0; i < qsize; i++) {
-                    quants[i] = quant_inds[i] & (((uint64_t) 1 << bitgroup[b]) - 1);
-                    quant_inds[i] >>= bitgroup[b];
-                    int qu = (((uint32_t) quants[i] << shift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
-                    if (i < error.size()) {
-                        // error[i] += qu * 2.0 * eb;
-                        // l2_error += error[i] * error[i];
-                    }
-                }
+                // uint64_t shift = bitgroup[b];
+                // uint64_t mask  = ((uint64_t)1 << shift) - 1;  
+                // #pragma omp parallel for
+                // for (size_t i = 0; i < qsize; i++) {
+                //     uint64_t val = quant_inds[i];
+                //     quants[i]    = val & mask;
+                //     quant_inds[i] = val >> shift;
+                // }
+
+
                 l2_diff[lid * bsize + b] = l2_error - ((b == bsize - 1) ? l2_error_base : l2_diff[lid * bsize + b + 1]);
                 // printf("l2 = %.10G , diff = %.10G\n", l2_error, l2_diff[lid * bsize + b]);
                 shift += bitgroup[b];
-
-
-                // ---------------
-                // arithemetic
-                // encoder.preprocess_encode(quants, 2);
-                // encoder.save(buffer_pos);
-                // encoder.encode(quants, buffer_pos);
-                // encoder.postprocess_encode();
+                uchar* lossless_data_pos_pos = lossless_data_pos;
                 
-                // memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
-                // size_t size = buffer_pos - buffer;
-                // total_size += size;
-                // lossless_data_pos += size;
-                // lossless_size.push_back(size);
-                // zstd
-                // size_t size = lossless.compress(
-                //             buffer, buffer_pos - buffer, lossless_data_pos);
-                // total_size += size;
-                // lossless_data_pos += size;
-                // lossless_size.push_back(size);
 
-                // arithemetic end
-                // ---------------
+                if(quants.size() > 0){    
+                    write(pred_table_0, lossless_data_pos_pos);
+                    write(pred_table_1, lossless_data_pos_pos);   
+                    size_t size = lossless.compress(
+                            buffer_bp_pos, numofEachBitPlane, lossless_data_pos_pos);
+    //                printf("%d %lu, ", bitgroup[b], size);
+                    size += sizeof(int32_t) * 2;
+                    total_size += size;
+                    lossless_data_pos += size;
+                    lossless_size.push_back(size);
 
-                // ---------------
-                // huffman && zstd
-                write(pred_table_0, buffer_pos);
-                write(pred_table_1, buffer_pos);
-                if(quants.size() > 0){
-                    if (bitgroup[b] == 1) {
-                        encode_int_1bit(quants, buffer_pos);
-                    // } else if (bitgroup[b] == 2) {
-                    //     encode_int_2bits(quants, buffer_pos);
-                    } else {
-                        //TODO huffman tree is huge if using large radius on early levels
-                        // set different radius for each level
-                        encoder.preprocess_encode(quants, 0);
-                        encoder.save(buffer_pos);
-                        encoder.encode(quants, buffer_pos);
-                        encoder.postprocess_encode();
-                    }
-                    if(qsize < 128 && bitgroup[b] == 1) {
-                        memcpy(lossless_data_pos, buffer, buffer_pos - buffer);
-                        size_t size = buffer_pos - buffer;
-        //                printf("%d %lu, ", bitgroup[b], size);
-                        total_size += size;
-                        lossless_data_pos += size;
-                        lossless_size.push_back(size);
-                    } else {
-                        size_t size = lossless.compress(
-                                buffer, buffer_pos - buffer, lossless_data_pos);
-        //                printf("%d %lu, ", bitgroup[b], size);
-                        total_size += size;
-                        lossless_data_pos += size;
-                        lossless_size.push_back(size);
-                    }
                 } else {
                     lossless_size.push_back(0);
                 }
@@ -875,8 +839,11 @@ namespace SZ3 {
 //            printf("\n");
             
             delete[]buffer;
+            delete[]buffer_bp;
             quant_inds.clear();
             // error.clear();
+
+            std::cout << "encoding time: " << totalTime << std::endl;
 
             return total_size;
         }
@@ -1361,38 +1328,85 @@ namespace SZ3 {
             int cnt_zero_one[31] = {0};
             int cnt_one_zero[31] = {0};
             int cnt_one_one[31] = {0};
-            for(int i = 0; i < quant_inds.size(); i++) {
-                uint32_t qt = quant_inds[i];
-                
-                for(int b = 0; b < 31; b++){
-                    cnt_zero_zero[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0x00000000u;
-                    cnt_zero_one[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0x40000000u;
-                    cnt_one_zero[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0x80000000u;
-                    cnt_one_one[b] += (qt & (uint32_t)0xc0000000u) == (uint32_t)0xc0000000u;
-                    qt = qt << 1;
+            size_t sz = quant_inds.size();
+
+            #pragma omp parallel
+            {
+                int local_zero_zero[31] = {0};
+                int local_zero_one[31]  = {0};
+                int local_one_zero[31]  = {0};
+                int local_one_one[31]   = {0};
+
+                #pragma omp for
+                for(int i = 0; i < sz; i++) {
+                    quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                    uint32_t qt = quant_inds[i];
+                    for(int b = 0; b < 31; b++) {
+                        uint32_t bits = (qt >> 30) & 0x3;
+                        switch (bits) {
+                            case 0: local_zero_zero[b]++; break;
+                            case 1: local_zero_one[b]++;  break;
+                            case 2: local_one_zero[b]++;  break;
+                            case 3: local_one_one[b]++;   break;
+                        }
+                        qt <<= 1;
+                    }
                 }
-            }
+
+                #pragma omp critical
+                {
+                    for(int b = 0; b < 31; b++){
+                        cnt_zero_zero[b] += local_zero_zero[b];
+                        cnt_zero_one[b]  += local_zero_one[b];
+                        cnt_one_zero[b]  += local_one_zero[b];
+                        cnt_one_one[b]   += local_one_one[b];
+                    }
+                }
+            } // end of parallel
 
             table_0 = 0;
             table_1 = 0;
-
-            for(int b = 1; b < 32; b++) {
-                table_0 = ((uint32_t)(cnt_zero_zero[b - 1] < cnt_zero_one[b - 1]) << (31 - b)) | table_0;
-            }
-
-            for(int b = 1; b < 32; b++) {
-                table_1 = ((uint32_t)(cnt_one_zero[b - 1] < cnt_one_one[b - 1]) << (31 - b)) | table_1;
+            for(int b = 1; b < 32; b++){
+                uint32_t shift_bits = (31 - b);
+                table_0 |= ((uint32_t)(cnt_zero_zero[b - 1] < cnt_zero_one[b - 1]) << shift_bits);
+                table_1 |= ((uint32_t)(cnt_one_zero[b - 1] < cnt_one_one[b - 1]) << shift_bits);
             }
         }
 
         void convert_table(const uint32_t tab_0, const uint32_t tab_1, std::vector<int>& quants) {
-            int sz = quants.size();
+            // int sz = quants.size();
+            // for(int i = 0; i < sz; i++){
+            //     uint32_t qt = quants[i];
+            //     for(int b = 31; b >= 1; b--){
+            //         qt = ((qt & (1 << (32 - b))) ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) ^ qt;
+            //     }
+            //     quants[i] = qt;
+            // }
+            const int sz = (int)quants.size();
+#pragma omp parallel for
             for(int i = 0; i < sz; i++){
-                uint32_t qt = quants[i];
+                uint32_t qt = (uint32_t)quants[i];
+                
+                uint32_t mask_qt  = 2u;
+                uint32_t mask_tab = 1u;
+                
                 for(int b = 31; b >= 1; b--){
-                    qt = ((qt & (1 << (32 - b))) ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) ^ qt;
+                    // 判断 qt 的最高 bit = mask_qt 是否为 1
+                    // 注意：b=31 时 mask_qt = 1<<31, b=1 时 mask_qt=1<<1
+                    if(qt & mask_qt) {
+                        // 若 bit=1 => XOR 上 (tab_1 & mask_tab)
+                        qt ^= (tab_1 & mask_tab);
+                    } else {
+                        // 若 bit=0 => XOR 上 (tab_0 & mask_tab)
+                        qt ^= (tab_0 & mask_tab);
+                    }
+                    
+                    // 每次循环后，mask_qt 和 mask_tab 右移一位
+                    mask_qt  <<= 1;
+                    mask_tab <<= 1;
                 }
-                quants[i] = qt;
+                
+                quants[i] = (int)qt;
             }
         }
 
