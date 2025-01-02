@@ -338,141 +338,9 @@ std::vector<T> bytes2vector(const unsigned char *&c, uint8_t bit_width, size_t n
 
     return data;
 }
-inline void encode_int_2bits(const std::vector<int> &data, uchar *&c) {
-
-    size_t intLen = data.size();
-    size_t byteLen = intLen * 2 / 8 + (intLen % 4 == 0 ? 0 : 1);
-
-    write(intLen, c);
-    write(byteLen, c);
-
-    size_t b, i = 0;
-    int mod4 = intLen % 4;
-    for (b = 0; b < (mod4 == 0 ? byteLen : byteLen - 1); b++, i += 4) {
-        c[b] = (data[i] << 6) | (data[i + 1] << 4) | (data[i + 2] << 2) | data[i + 3];
-    }
-    if (mod4 > 0) {
-        if (mod4 == 1) {
-            c[b] = (data[i] << 6);
-        } else if (mod4 == 2) {
-            c[b] = (data[i] << 6) | (data[i + 1] << 4);
-        } else if (mod4 == 3) {
-            c[b] = (data[i] << 6) | (data[i + 1] << 4) | (data[i + 2] << 2);
-        }
-    }
-    c += byteLen;
-}
 
 
-std::vector<int> decode_int_2bits(const uchar *&c, size_t &remaining_length) {
-    size_t byteLen, intLen;
-    read(intLen, c, remaining_length);
-    read(byteLen, c, remaining_length);
-    std::vector<int> ints(intLen);
-    size_t i = 0, b = 0;
-
-    int mod4 = intLen % 4;
-    for (; b < (mod4 == 0 ? byteLen : byteLen - 1); b++, i += 4) {
-        ints[i] = (c[b] & 0xC0) >> 6;
-        ints[i + 1] = (c[b] & 0x30) >> 4;
-        ints[i + 2] = (c[b] & 0x0C) >> 2;
-        ints[i + 3] = c[b] & 0x03;
-    }
-    if (mod4 > 0) {
-        if (mod4 >= 1) {
-            ints[i] = (c[b] & 0xC0) >> 6;
-        }
-        if (mod4 >= 2) {
-            ints[i + 1] = (c[b] & 0x30) >> 4;
-        }
-        if (mod4 >= 3) {
-            ints[i + 2] = (c[b] & 0x0C) >> 2;
-        }
-    }
-    c += byteLen;
-    remaining_length -= byteLen;
-    return ints;
-}
-
-// inline void encode_int_1bit(const std::vector<int> &data, unsigned char *&c)
-// {
-//     size_t intLen  = data.size();
-//     size_t byteLen = (intLen + 7) / 8; // 向上取整
-
-//     // 1) 清空要写的字节区间 (确保后续 |= 不会干扰)
-//     memset(c, 0, byteLen);
-
-// #pragma omp parallel
-//     {
-//         int tid = omp_get_thread_num();
-//         int nt  = omp_get_num_threads();
-        
-//         // 均匀分段
-//         size_t chunkSize = (intLen + nt - 1) / nt; // 向上取整
-//         size_t start     = tid * chunkSize;
-//         size_t end       = (tid + 1) * chunkSize;
-//         if (end > intLen) end = intLen;
-
-//         // 本线程只负责 [start, end)
-//         for (size_t i = start; i < end; i++) {
-//             size_t idx = i >> 3;
-//             size_t bit = 7 - (i & 7);
-//             c[idx] |= (data[i] & 1) << bit;
-//         }
-//     }
-
-//     c += byteLen;
-// }
-
-char* splitIntoBitPlanesToBuffer(const std::vector<int32_t>& input,
-                                 size_t& outBufferSize)
-{
-    size_t n = input.size();
-    if (n == 0)
-    {
-        outBufferSize = 0;
-        return nullptr;
-    }
-
-    // 计算每个平面需要的 32-bit 块数量 (向上取整)
-    size_t blocksPerPlane = (n + 31) / 32;
-    // 总字节数 = 32 (平面数) * blocksPerPlane * 4
-    outBufferSize = 32 * blocksPerPlane * sizeof(uint32_t);
-
-    // 分配并清空内存
-    char* buffer = new char[outBufferSize];
-    std::memset(buffer, 0, outBufferSize);
-
-    // 遍历所有元素
-    for (size_t i = 0; i < n; ++i)
-    {
-        // 当前元素(以无符号形式看待其补码位)
-        uint32_t val = static_cast<uint32_t>(input[i]);
-
-        // 计算 block 下标 和 bit 偏移
-        size_t blockIdx  = i >> 5; // i / 32
-        size_t bitOffset = i & 31; // i % 32
-
-        // 将第 b 位 bit 放到 plane[b][blockIdx] 的 bitOffset 上
-        for (int b = 0; b < 32; ++b)
-        {
-            uint32_t bit = (val >> b) & 1U;
-
-            // 找到第 b 个平面的起始位置
-            size_t planeOffsetBytes = static_cast<size_t>(b) * blocksPerPlane * sizeof(uint32_t);
-
-            // planeBuffer 指向第 b 个平面的首地址 (转换为 uint32_t*)
-            uint32_t* planeBuffer = reinterpret_cast<uint32_t*>(buffer + planeOffsetBytes);
-
-            // 写入该平面的 blockIdx
-            planeBuffer[blockIdx] |= (bit << bitOffset);
-        }
-    }
-
-    return buffer;
-}
-
-uchar* bitTranspose8(std::vector<int32_t> &in)
+inline uchar* bitTranspose8(std::vector<int32_t> &in)
 {
     if (in.size() % 8 != 0) {
         int res = 8 - in.size() % 8;
@@ -484,7 +352,7 @@ uchar* bitTranspose8(std::vector<int32_t> &in)
     size_t nBlocks = in.size() / blockSize;
 
     uchar* out = new uchar[nBlocks * bitsPerInt];
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (size_t b = 0; b < nBlocks; b++) {
         size_t baseIn = b * blockSize;
         size_t baseOut = b * bitsPerInt;
@@ -516,47 +384,8 @@ uchar* bitTranspose8(std::vector<int32_t> &in)
     return out;
 }
 
-inline void encode_int_1bit(const std::vector<int> &data, uchar *&c) {
 
-    size_t intLen = data.size();
-    size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
-
-    // write(intLen, c);
-    // write(byteLen, c);
-
-    size_t b, i = 0;
-    int mod8 = intLen % 8;
-    #pragma omp parallel for
-    for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
-        size_t i = b * 8; 
-        c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4)
-                | (data[i + 4] << 3) | (data[i + 5] << 2) | (data[i + 6] << 1) | (data[i + 7]);
-    }
-    if (mod8 > 0) {
-        if (mod8 == 1) {
-            c[b] = (data[i] << 7);
-        } else if (mod8 == 2) {
-            c[b] = (data[i] << 7) | (data[i + 1] << 6);
-        } else if (mod8 == 3) {
-            c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5);
-        } else if (mod8 == 4) {
-            uchar temp = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4);
-            c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4);
-        } else if (mod8 == 5) {
-            c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4)
-                    | (data[i + 4] << 3);
-        } else if (mod8 == 6) {
-            c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4)
-                    | (data[i + 4] << 3) | (data[i + 5] << 2);
-        } else if (mod8 == 7) {
-            c[b] = (data[i] << 7) | (data[i + 1] << 6) | (data[i + 2] << 5) | (data[i + 3] << 4)
-                    | (data[i + 4] << 3) | (data[i + 5] << 2) | (data[i + 6] << 1);
-        }
-    }
-    c += byteLen;
-}
-
-void add_to_quant(std::vector<int32_t>& quant_inds, const std::vector<uchar>& bytes, int bitshift) {
+inline void add_to_quant(std::vector<int32_t>& quant_inds, const std::vector<uchar>& bytes, int bitshift) {
     size_t i = 0, b = 0;
     size_t intLen = quant_inds.size();
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
@@ -598,54 +427,6 @@ void add_to_quant(std::vector<int32_t>& quant_inds, const std::vector<uchar>& by
     }
 }
 
-std::vector<int> decode_int_1bit(const uchar *&c, size_t &remaining_length, size_t intLen) {
-    // size_t byteLen, intLen;
-    // read(intLen, c, remaining_length);
-    // read(byteLen, c, remaining_length);
-    size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
-
-    std::vector<int> ints(intLen);
-    size_t i = 0, b = 0;
-
-    int mod8 = intLen % 8;
-    for (; b < (mod8 == 0 ? byteLen : byteLen - 1); b++, i += 8) {
-        ints[i] = (c[b] & 0x80) >> 7;
-        ints[i + 1] = (c[b] & 0x40) >> 6;
-        ints[i + 2] = (c[b] & 0x20) >> 5;
-        ints[i + 3] = (c[b] & 0x10) >> 4;
-        ints[i + 4] = (c[b] & 0x08) >> 3;
-        ints[i + 5] = (c[b] & 0x04) >> 2;
-        ints[i + 6] = (c[b] & 0x02) >> 1;
-        ints[i + 7] = (c[b] & 0x01);
-    }
-    if (mod8 > 0) {
-        if (mod8 >= 1) {
-            ints[i] = (c[b] & 0x80) >> 7;
-        }
-        if (mod8 >= 2) {
-            ints[i + 1] = (c[b] & 0x40) >> 6;
-        }
-        if (mod8 >= 3) {
-            ints[i + 2] = (c[b] & 0x20) >> 5;
-        }
-        if (mod8 >= 4) {
-            ints[i + 3] = (c[b] & 0x10) >> 4;
-        }
-        if (mod8 >= 5) {
-            ints[i + 4] = (c[b] & 0x08) >> 3;
-        }
-        if (mod8 >= 6) {
-            ints[i + 5] = (c[b] & 0x04) >> 2;
-        }
-        if (mod8 >= 7) {
-            ints[i + 6] = (c[b] & 0x02) >> 1;
-        }
-
-    }
-    c += byteLen;
-    remaining_length -= byteLen;
-    return ints;
-}
 
 };      // namespace SZ3
 #endif  // SZ3_BYTEUTIL_HPP
