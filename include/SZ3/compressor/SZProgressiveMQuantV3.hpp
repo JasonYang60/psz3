@@ -1329,37 +1329,28 @@ namespace SZ3 {
             int cnt_one_zero[31] = {0};
             int cnt_one_one[31] = {0};
             size_t sz = quant_inds.size();
-
-            #pragma omp parallel
+            // #pragma omp parallel
             {
-                int local_zero_zero[31] = {0};
-                int local_zero_one[31]  = {0};
-                int local_one_zero[31]  = {0};
-                int local_one_one[31]   = {0};
+                int local_count[31][4] = {0};
 
-                #pragma omp for
+                // #pragma omp for
                 for(int i = 0; i < sz; i++) {
-                    quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
-                    uint32_t qt = quant_inds[i];
-                    for(int b = 0; b < 31; b++) {
-                        uint32_t bits = (qt >> 30) & 0x3;
-                        switch (bits) {
-                            case 0: local_zero_zero[b]++; break;
-                            case 1: local_zero_one[b]++;  break;
-                            case 2: local_one_zero[b]++;  break;
-                            case 3: local_one_one[b]++;   break;
-                        }
-                        qt <<= 1;
-                    }
+                    // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                    // uint32_t qt = quant_inds[i];
+                    // for(int b = 0; b < 31; b++) {
+                    //     uint32_t bits = (qt >> 30) & 0x3;
+                    //     local_count[b][bits]++;
+                    //     qt <<= 1;
+                    // }
                 }
 
-                #pragma omp critical
+                // #pragma omp critical
                 {
                     for(int b = 0; b < 31; b++){
-                        cnt_zero_zero[b] += local_zero_zero[b];
-                        cnt_zero_one[b]  += local_zero_one[b];
-                        cnt_one_zero[b]  += local_one_zero[b];
-                        cnt_one_one[b]   += local_one_one[b];
+                        cnt_zero_zero[b] += local_count[b][0];
+                        cnt_zero_one[b]  += local_count[b][1];
+                        cnt_one_zero[b]  += local_count[b][2];
+                        cnt_one_one[b]   += local_count[b][3];
                     }
                 }
             } // end of parallel
@@ -1371,73 +1362,24 @@ namespace SZ3 {
                 table_0 |= ((uint32_t)(cnt_zero_zero[b - 1] < cnt_zero_one[b - 1]) << shift_bits);
                 table_1 |= ((uint32_t)(cnt_one_zero[b - 1] < cnt_one_one[b - 1]) << shift_bits);
             }
+
+            table_0 = 0;
+            table_1 = 0xFFFFFFFFu >> 1;
         }
 
         void convert_table(const uint32_t tab_0, const uint32_t tab_1, std::vector<int>& quants) {
-            // int sz = quants.size();
-            // for(int i = 0; i < sz; i++){
-            //     uint32_t qt = quants[i];
-            //     for(int b = 31; b >= 1; b--){
-            //         qt = ((qt & (1 << (32 - b))) ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) ^ qt;
-            //     }
-            //     quants[i] = qt;
-            // }
+
             const int sz = (int)quants.size();
-#pragma omp parallel for
-            for(int i = 0; i < sz; i++){
-                uint32_t qt = (uint32_t)quants[i];
-                
-                uint32_t mask_qt  = 2u;
-                uint32_t mask_tab = 1u;
-                
-                for(int b = 31; b >= 1; b--){
-                    // 判断 qt 的最高 bit = mask_qt 是否为 1
-                    // 注意：b=31 时 mask_qt = 1<<31, b=1 时 mask_qt=1<<1
-                    if(qt & mask_qt) {
-                        // 若 bit=1 => XOR 上 (tab_1 & mask_tab)
-                        qt ^= (tab_1 & mask_tab);
-                    } else {
-                        // 若 bit=0 => XOR 上 (tab_0 & mask_tab)
-                        qt ^= (tab_0 & mask_tab);
-                    }
-                    
-                    // 每次循环后，mask_qt 和 mask_tab 右移一位
-                    mask_qt  <<= 1;
-                    mask_tab <<= 1;
-                }
-                
+// #pragma omp parallel for
+            for(int i = 0; i < sz; i++) {
+                uint32_t qt = (uint32_t) quants[i];
+                uint32_t sel = qt >> 1;
+                uint32_t pred = (tab_1 & sel) | (tab_0 & ~sel);
+                qt ^= pred;
+
                 quants[i] = (int)qt;
             }
         }
-
-        // void invert_table(const uint32_t tab, std::vector<int>& quants) {
-        //     int sz = quants.size();
-        //     for(int i = 0; i < sz; i++){
-        //         uint32_t qt = quants[i];
-        //         for(int b = 1; b < 16; b++){
-        //             qt = ((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) ^ qt;
-        //         }
-        //         quants[i] = qt;
-        //     }
-        // }
-
-        // void invert_table(const uint32_t tab, std::vector<int>& quant_ind_truncated, int b) {
-        //     int sz = quant_ind_truncated.size();
-        //     std::vector<int> temp(sz, 0);
-        //     assert(sz == quant_inds.size());
-        //     for (size_t i = 0; i < sz; i++) {
-        //             temp[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
-        //             // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
-        //             // one_cnt += (quant_inds[i] & (uint32_t)3) == (uint32_t)3;
-                    
-        //             // quant_inds[i] += (1 << 15) - 1;
-        //     }
-
-        //     for(int i = 0; i < sz; i++){
-        //         uint32_t qt = temp[i];
-        //         quant_ind_truncated[i] = quant_ind_truncated[i] ^ (((qt & (1 << (16 - b))) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) >> (15 - b));
-        //     }
-        // }
 
         void invert_table(const uint32_t tab_0, const uint32_t tab_1, std::vector<int>& quant_ind_truncated, int b, int lid) {
             int sz = quant_ind_truncated.size();
