@@ -677,12 +677,7 @@ namespace SZ3 {
             uchar * compressed_data = new uchar[rSize];
             length = lossless.decompress(data_pos, length, compressed_data, rSize);
 
-            uchar const *compressed_data_pos = compressed_data;
-
-            // size_t quant_size;
-            // read(quant_size, compressed_data_pos, length);
-
-            
+            uchar const *compressed_data_pos = compressed_data;            
 
             // std::vector<int> quant_ind_truncated;
             // if (bitgroup[bg] == 1) {
@@ -695,12 +690,7 @@ namespace SZ3 {
             //     encoder.postprocess_decode();
             // }
 
-            // lossless.postdecompress_data(compressed_data);
-            // huffman && zstd ends
-            // ---------------
-
-
-//                printf("\n************Bitplane = %d *****************\n", bg);
+            
             int bitshift = 32;
             for (int bb = 0; bb <= bg; bb++) {
                 bitshift -= bitgroup[bb];
@@ -715,36 +705,43 @@ namespace SZ3 {
              * 
              *  only in case: bitgroup = {16 1 1 ... 1}
              */
-            int b = 31 - bitshift; 
+            int b = 31 - bitshift;
+            std::vector<int> quants(quant_size, 0);
 
             if(b >= 0) {
                 // invert_table(pred_table_0, pred_table_1, quant_ind_truncated, b, lid);
-                invert_table(pred_table_0, pred_table_1, compressed_data, length, lid);
+                invert_table(pred_table_0, pred_table_1, compressed_data, length, lid, quants, quant_size);
 
             }
             delete[] compressed_data;
+            
+            add_to_quant(quant_inds, last_bit[lid], bitshift);
 
             // std::cout << "------[Log] quant size = " << quant_size << std::endl;
-            int realBlock = quant_size / 8;
-            for (size_t i = 0; i < realBlock; i++) {
-                uchar byte = last_bit[lid][i];
-                quant_inds[i * 8 + 0] += ((uint32_t) (byte & 0x80u)) << bitshift;
-                quant_inds[i * 8 + 1] += ((uint32_t) (byte & 0x40u)) << bitshift;
-                quant_inds[i * 8 + 2] += ((uint32_t) (byte & 0x20u)) << bitshift;
-                quant_inds[i * 8 + 3] += ((uint32_t) (byte & 0x10u)) << bitshift;
-                quant_inds[i * 8 + 4] += ((uint32_t) (byte & 0x08u)) << bitshift;
-                quant_inds[i * 8 + 5] += ((uint32_t) (byte & 0x04u)) << bitshift;
-                quant_inds[i * 8 + 6] += ((uint32_t) (byte & 0x02u)) << bitshift;
-                quant_inds[i * 8 + 7] += ((uint32_t) (byte & 0x01u)) << bitshift;
-            }
+            // for (int i = 0; i < quant_size; i++) {
+            //     quant_inds[i] += ((uint32_t) quants[i]) << bitshift;
+            // }
+            // int realBlock = quant_size / 8;
 
-            int remainingBytes = quant_size % 8;
-            if(remainingBytes > 0) {
-                uchar byte = last_bit[lid][realBlock];
-                for(size_t j = 0; j < remainingBytes; j++) {
-                    quant_inds[realBlock * 8 + j] += ((uint32_t) (byte & (0x80u >> j))) << bitshift;
-                }
-            }
+            // for (size_t i = 0; i < realBlock; i++) {
+            //     uchar byte = last_bit[lid][i];
+            //     quant_inds[i * 8 + 0] += ((uint32_t) (byte << 0 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 1] += ((uint32_t) (byte << 1 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 2] += ((uint32_t) (byte << 2 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 3] += ((uint32_t) (byte << 3 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 4] += ((uint32_t) (byte << 4 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 5] += ((uint32_t) (byte << 5 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 6] += ((uint32_t) (byte << 6 >> 7)) << bitshift;
+            //     quant_inds[i * 8 + 7] += ((uint32_t) (byte << 7 >> 7)) << bitshift;
+            // }
+
+            // int remainingBytes = quant_size % 8;
+            // if(remainingBytes > 0) {
+            //     uchar byte = last_bit[lid][realBlock];
+            //     for(size_t j = 0; j < remainingBytes; j++) {
+            //         quant_inds[realBlock * 8 + j] += ((uint32_t) (byte << j >> 7)) << bitshift;
+            //     }
+            // }
 
             // std::cout << "decoding time = " << totalTime << std::endl;
 
@@ -1408,19 +1405,55 @@ namespace SZ3 {
         // }
 
             
-        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid) {
-            // int sz = quant_ind_truncated.size();
-            // assert(sz == quant_inds.size());
-            
-            // if(b > 0) {
-            //     for(int i = 0; i < sz; i++){
-            //         quant_ind_truncated[i] = quant_ind_truncated[i] ^ ((last_bit[lid][i] ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) >> (31 - b));
-            //     }
-            // }
+        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid, std::vector<int>& quants, int intLen) {
+
             for(int i = 0; i < length; i++) {
                 buffer[i] ^= last_bit[lid][i];
                 last_bit[lid][i] = buffer[i];
             }
+
+            // size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
+            // std::vector<int> ints(intLen);
+            // size_t i = 0, b = 0;
+            // std::vector<uchar> c = last_bit[lid];
+
+            // int mod8 = intLen % 8;
+            // for (; b < (mod8 == 0 ? byteLen : byteLen - 1); b++, i += 8) {
+            //     ints[i] = (c[b] & 0x80) >> 7;
+            //     ints[i + 1] = (c[b] & 0x40) >> 6;
+            //     ints[i + 2] = (c[b] & 0x20) >> 5;
+            //     ints[i + 3] = (c[b] & 0x10) >> 4;
+            //     ints[i + 4] = (c[b] & 0x08) >> 3;
+            //     ints[i + 5] = (c[b] & 0x04) >> 2;
+            //     ints[i + 6] = (c[b] & 0x02) >> 1;
+            //     ints[i + 7] = (c[b] & 0x01);
+            // }
+            // if (mod8 > 0) {
+            //     if (mod8 >= 1) {
+            //         ints[i] = (c[b] & 0x80) >> 7;
+            //     }
+            //     if (mod8 >= 2) {
+            //         ints[i + 1] = (c[b] & 0x40) >> 6;
+            //     }
+            //     if (mod8 >= 3) {
+            //         ints[i + 2] = (c[b] & 0x20) >> 5;
+            //     }
+            //     if (mod8 >= 4) {
+            //         ints[i + 3] = (c[b] & 0x10) >> 4;
+            //     }
+            //     if (mod8 >= 5) {
+            //         ints[i + 4] = (c[b] & 0x08) >> 3;
+            //     }
+            //     if (mod8 >= 6) {
+            //         ints[i + 5] = (c[b] & 0x04) >> 2;
+            //     }
+            //     if (mod8 >= 7) {
+            //         ints[i + 6] = (c[b] & 0x02) >> 1;
+            //     }
+
+            // }
+            // quants = ints;
+
         }
     };
 };

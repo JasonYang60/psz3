@@ -484,9 +484,7 @@ uchar* bitTranspose8(std::vector<int32_t> &in)
     size_t nBlocks = in.size() / blockSize;
 
     uchar* out = new uchar[nBlocks * bitsPerInt];
-    // #pragma omp parallel for
-
-    
+    #pragma omp parallel for
     for (size_t b = 0; b < nBlocks; b++) {
         size_t baseIn = b * blockSize;
         size_t baseOut = b * bitsPerInt;
@@ -556,6 +554,48 @@ inline void encode_int_1bit(const std::vector<int> &data, uchar *&c) {
         }
     }
     c += byteLen;
+}
+
+void add_to_quant(std::vector<int32_t>& quant_inds, const std::vector<uchar>& bytes, int bitshift) {
+    size_t i = 0, b = 0;
+    size_t intLen = quant_inds.size();
+    size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
+
+    int mod8 = intLen % 8;
+    for (; b < (mod8 == 0 ? byteLen : byteLen - 1); b++, i += 8) {
+        quant_inds[i] += ((uint32_t) ((bytes[b] & 0x80) >> 7)) << bitshift;
+        quant_inds[i + 1] += ((uint32_t) ((bytes[b] & 0x40) >> 6)) << bitshift;
+        quant_inds[i + 2] += ((uint32_t) ((bytes[b] & 0x20) >> 5)) << bitshift;
+        quant_inds[i + 3] += ((uint32_t) ((bytes[b] & 0x10) >> 4)) << bitshift;
+        quant_inds[i + 4] += ((uint32_t) ((bytes[b] & 0x08) >> 3)) << bitshift;
+        quant_inds[i + 5] += ((uint32_t) ((bytes[b] & 0x04) >> 2)) << bitshift;
+        quant_inds[i + 6] += ((uint32_t) ((bytes[b] & 0x02) >> 1)) << bitshift;
+        quant_inds[i + 7] += ((uint32_t) ((bytes[b] & 0x01))) << bitshift;
+    }
+    if (mod8 > 0) {
+        if (mod8 >= 1) {
+            quant_inds[i] += ((uint32_t) ((bytes[b] & 0x80) >> 7)) << bitshift;
+        }
+        if (mod8 >= 2) {
+            quant_inds[i + 1] += ((uint32_t) ((bytes[b] & 0x40) >> 6)) << bitshift;
+        }
+        if (mod8 >= 3) {
+            quant_inds[i + 2] += ((uint32_t) ((bytes[b] & 0x20) >> 5)) << bitshift;
+        }
+        if (mod8 >= 4) {
+            quant_inds[i + 3] += ((uint32_t) ((bytes[b] & 0x10) >> 4)) << bitshift;
+        }
+        if (mod8 >= 5) {
+            quant_inds[i + 4] += ((uint32_t) ((bytes[b] & 0x08) >> 3)) << bitshift;
+        }
+        if (mod8 >= 6) {
+            quant_inds[i + 5] += ((uint32_t) ((bytes[b] & 0x04) >> 2)) << bitshift;
+        }
+        if (mod8 >= 7) {
+            quant_inds[i + 6] += ((uint32_t) ((bytes[b] & 0x01))) << bitshift;
+        }
+
+    }
 }
 
 std::vector<int> decode_int_1bit(const uchar *&c, size_t &remaining_length, size_t intLen) {
