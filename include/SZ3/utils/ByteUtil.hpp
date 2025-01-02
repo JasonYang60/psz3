@@ -484,7 +484,9 @@ uchar* bitTranspose8(std::vector<int32_t> &in)
     size_t nBlocks = in.size() / blockSize;
 
     uchar* out = new uchar[nBlocks * bitsPerInt];
-    #pragma omp parallel for
+    // #pragma omp parallel for
+
+    
     for (size_t b = 0; b < nBlocks; b++) {
         size_t baseIn = b * blockSize;
         size_t baseOut = b * bitsPerInt;

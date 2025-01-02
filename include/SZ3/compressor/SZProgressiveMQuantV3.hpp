@@ -379,8 +379,10 @@ namespace SZ3 {
                 }
                 printf("\n");
             }
-            // Timer timer(true);
-            // timer.start();
+            Timer timer(true);
+            Timer timer2(true);
+            double totalTime = 0;
+            timer.start();
             bool retrive = true;
             {   // retrive = if elements in bsum are all zeros
                 for(auto i : bsum){
@@ -411,10 +413,12 @@ namespace SZ3 {
                     size_t quant_size = levelSize[(level_progressive - level) * N + direct];
                     int bg_end = std::min(bsize, bsum[lid] + bdelta[lid]);
                     {   // load bit group data into quant_ids[ ]
+                        timer2.start();
+
                         quant_inds.clear();
                         quant_cnt = 0;
                         quant_inds.resize(quant_size, 0);
-                        last_bit[lid].resize(quant_size, 0);
+                        last_bit[lid].resize((quant_size + 7) / 8, 0);
 
                         if (bdelta[lid] > 0){
                             for (int b = bsum[lid]; b < bg_end; b++) {
@@ -427,7 +431,7 @@ namespace SZ3 {
                             }
                         }
                         // level_cnt++; 
-
+                        totalTime += timer2.stop();
                         
                     }
                     if(level_progressive == levels && lid == 0) // retrive
@@ -466,7 +470,8 @@ namespace SZ3 {
             //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
             //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             // }
-            // std::cout << "decompress time = " << timer.stop() << std::endl;
+            std::cout << "decompress time = " << timer.stop() << std::endl;
+            std::cout << "decoding time = " << totalTime << std::endl;
             return dec_data;
         }
 
@@ -561,16 +566,18 @@ namespace SZ3 {
                     quantize(0, data[0], 0);
                 }
                 for (int d = 0; d < N; d++) {
+
                     block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::quantize,
                                         interpolators[interpolator_id], directions[d], stride, true);
 
                     auto quant_size = quant_inds.size();
                     quant_inds_total += quant_size;
                     write(quant_size, levelSize_pos);
-
                     timer2.start();
+
                     auto size = encode_lossless_bitplane((level_progressive - level) * N + d, lossless_data_pos, lossless_size, eb);
                     totalTime += timer2.stop();
+
                     // printf("level = %d , direction = %d, quant size = %lu, lossless size = %lu, time=%.3f\n\n",
                     //        level, d, quant_size, size, timer.stop());
 
@@ -618,7 +625,8 @@ namespace SZ3 {
         std::vector<T> ebs;
         std::vector<std::string> interpolators;
         std::vector<int32_t> quant_inds;
-        std::vector<std::vector<int>> last_bit;
+        // std::vector<std::vector<int>> last_bit;
+        std::vector<std::vector<uchar>> last_bit;
         std::vector<T> error;
         std::vector<T> l2_diff;
         size_t quant_cnt = 0; // for decompress
@@ -654,6 +662,7 @@ namespace SZ3 {
         void
         lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size, int lid) {
             // Timer timer(true);
+            // double totalTime = 0;
 
             size_t length = data_length;
             retrieved_size += length;
@@ -675,21 +684,20 @@ namespace SZ3 {
 
             
 
-            std::vector<int> quant_ind_truncated;
-            if (bitgroup[bg] == 1) {
-                quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
-            // } else if (bitgroup[bg] == 2) {
-            //     quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
-            } else {
-                encoder.load(compressed_data_pos, length);
-                quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
-                encoder.postprocess_decode();
-            }
+            // std::vector<int> quant_ind_truncated;
+            // if (bitgroup[bg] == 1) {
+            //     quant_ind_truncated = decode_int_1bit(compressed_data_pos, length, quant_size);
+            // // } else if (bitgroup[bg] == 2) {
+            // //     quant_ind_truncated = decode_int_2bits(compressed_data_pos, length);
+            // } else {
+            //     encoder.load(compressed_data_pos, length);
+            //     quant_ind_truncated = encoder.decode(compressed_data_pos, quant_size);
+            //     encoder.postprocess_decode();
+            // }
 
             // lossless.postdecompress_data(compressed_data);
             // huffman && zstd ends
             // ---------------
-            delete[] compressed_data;
 
 
 //                printf("\n************Bitplane = %d *****************\n", bg);
@@ -710,33 +718,36 @@ namespace SZ3 {
             int b = 31 - bitshift; 
 
             if(b >= 0) {
-                invert_table(pred_table_0, pred_table_1, quant_ind_truncated, b, lid);
+                // invert_table(pred_table_0, pred_table_1, quant_ind_truncated, b, lid);
+                invert_table(pred_table_0, pred_table_1, compressed_data, length, lid);
+
             }
+            delete[] compressed_data;
+
             // std::cout << "------[Log] quant size = " << quant_size << std::endl;
-            for (size_t i = 0; i < quant_size; i++) {
-
-
-                quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
-                // quant_inds[i] += (((uint32_t) quant_ind_truncated[i] << bitshift)) - 0xaaaaaaaau;
-
-                // int bitshiftcnt = bitshift;
-                // if(bitshiftcnt < 16){
-                //     for (int j = 0; j < bitgroup[bg]; j++){
-                //         int quant_ind_truncated_bit = (quant_ind_truncated[i] >> j) & 1;
-                //         int add = (bitshiftcnt == 0) ? quant_ind_truncated_bit : ((quant_ind_truncated_bit == 1 ) ? (1 << (bitshiftcnt - 1)) : - (1 << (bitshiftcnt - 1)));
-                //         quant_inds[i] += add;
-                //         bitshiftcnt++;
-                //     }
-                // }
-                // if(bitshift < 16) {
-                //     // int offset = ((((((unsigned int)(1 << 15) - 1) >> bitshift) << bitshift) << (bitshift + bitgroup[bg])) >> (bitshift + bitgroup[bg]));
-                //     int offset = (1 << 15) - 1;
-                //     quant_inds[i] += (quant_ind_truncated[i] << bitshift) - offset;
-                // }
-
+            int realBlock = quant_size / 8;
+            for (size_t i = 0; i < realBlock; i++) {
+                uchar byte = last_bit[lid][i];
+                quant_inds[i * 8 + 0] += ((uint32_t) (byte & 0x80u)) << bitshift;
+                quant_inds[i * 8 + 1] += ((uint32_t) (byte & 0x40u)) << bitshift;
+                quant_inds[i * 8 + 2] += ((uint32_t) (byte & 0x20u)) << bitshift;
+                quant_inds[i * 8 + 3] += ((uint32_t) (byte & 0x10u)) << bitshift;
+                quant_inds[i * 8 + 4] += ((uint32_t) (byte & 0x08u)) << bitshift;
+                quant_inds[i * 8 + 5] += ((uint32_t) (byte & 0x04u)) << bitshift;
+                quant_inds[i * 8 + 6] += ((uint32_t) (byte & 0x02u)) << bitshift;
+                quant_inds[i * 8 + 7] += ((uint32_t) (byte & 0x01u)) << bitshift;
             }
-            // std::cout << "------[Log] quant_size = " << quant_size << std::endl;
-            // std::cout << "------[Log] bg = " << bg << std::endl;
+
+            int remainingBytes = quant_size % 8;
+            if(remainingBytes > 0) {
+                uchar byte = last_bit[lid][realBlock];
+                for(size_t j = 0; j < remainingBytes; j++) {
+                    quant_inds[realBlock * 8 + j] += ((uint32_t) (byte & (0x80u >> j))) << bitshift;
+                }
+            }
+
+            // std::cout << "decoding time = " << totalTime << std::endl;
+
         }
 
 
@@ -756,6 +767,7 @@ namespace SZ3 {
             //     // timer.start();
             //     for (size_t i = 0; i < qsize; i++) {
             //         quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                    
             //         // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau);
             //         // one_cnt += (quant_inds[i] & (uint32_t)3) == (uint32_t)3;
                     
@@ -1335,6 +1347,7 @@ namespace SZ3 {
 
                 // #pragma omp for
                 for(int i = 0; i < sz; i++) {
+                    
                     // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
                     // uint32_t qt = quant_inds[i];
                     // for(int b = 0; b < 31; b++) {
@@ -1372,25 +1385,42 @@ namespace SZ3 {
             const int sz = (int)quants.size();
 // #pragma omp parallel for
             for(int i = 0; i < sz; i++) {
-                uint32_t qt = (uint32_t) quants[i];
-                uint32_t sel = qt >> 1;
-                uint32_t pred = (tab_1 & sel) | (tab_0 & ~sel);
-                qt ^= pred;
+                // uint32_t qt = (uint32_t) quants[i];
+                // uint32_t sel = qt >> 1;
+                // uint32_t pred = (tab_1 & sel) | (tab_0 & ~sel);
+                // qt ^= pred;
 
-                quants[i] = (int)qt;
+                // quants[i] = (int)qt;
+                quants[i] ^= (((uint32_t)quants[i]) >> 1);
             }
         }
 
-        void invert_table(const uint32_t tab_0, const uint32_t tab_1, std::vector<int>& quant_ind_truncated, int b, int lid) {
-            int sz = quant_ind_truncated.size();
-            assert(sz == quant_inds.size());
+        // void invert_table(const uint32_t tab_0, const uint32_t tab_1, std::vector<int>& quant_ind_truncated, int b, int lid) {
+        //     int sz = quant_ind_truncated.size();
+        //     assert(sz == quant_inds.size());
             
-            if(b > 0) {
-                for(int i = 0; i < sz; i++){
-                    quant_ind_truncated[i] = quant_ind_truncated[i] ^ ((last_bit[lid][i] ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) >> (31 - b));
-                }
+        //     if(b > 0) {
+        //         for(int i = 0; i < sz; i++){
+        //             quant_ind_truncated[i] = quant_ind_truncated[i] ^ ((last_bit[lid][i] ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) >> (31 - b));
+        //         }
+        //     }
+        //     last_bit[lid] = quant_ind_truncated;
+        // }
+
+            
+        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid) {
+            // int sz = quant_ind_truncated.size();
+            // assert(sz == quant_inds.size());
+            
+            // if(b > 0) {
+            //     for(int i = 0; i < sz; i++){
+            //         quant_ind_truncated[i] = quant_ind_truncated[i] ^ ((last_bit[lid][i] ? (tab_1 & (1 << (31 - b))) : (tab_0 & (1 << (31 - b)))) >> (31 - b));
+            //     }
+            // }
+            for(int i = 0; i < length; i++) {
+                buffer[i] ^= last_bit[lid][i];
+                last_bit[lid][i] = buffer[i];
             }
-            last_bit[lid] = quant_ind_truncated;
         }
     };
 };
