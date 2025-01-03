@@ -21,9 +21,9 @@ foreach (EXE IN LISTS exes)
     install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${EXE} TYPE BIN)
     # target_compile_options(${EXE} PRIVATE 
     #     -O3
-    #     # -mavx2
+    #     -mavx2
     #     -march=native
-    #     -ftree-vectorize
+    #     # -ftree-vectorize
     # )
 endforeach ()
 #install(FILES ${PROJECT_SOURCE_DIR}/test/testfloat_8_8_128.dat DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})

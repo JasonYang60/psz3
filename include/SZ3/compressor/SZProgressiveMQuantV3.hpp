@@ -18,7 +18,7 @@
 #include "SZ3/def.hpp"
 #include <cstring>
 #include <cmath>
-// #include <immintrin.h>
+#include <immintrin.h>
 
 namespace SZ3 {
     template<class T, uint N, class Quantizer, class Encoder, class Lossless>
@@ -420,7 +420,11 @@ namespace SZ3 {
                         quant_inds.clear();
                         quant_cnt = 0;
                         quant_inds.resize(quant_size, 0);
-                        last_bit[lid].resize((quant_size + 7) / 8, 0);
+
+                        size_t compressed_bit_package_size = (quant_size + 7) / 8;
+                        last_bit[lid].resize(compressed_bit_package_size, 0);
+
+                        uchar* loaded_bits = static_cast<uchar*>(::operator new(compressed_bit_package_size * 32, std::align_val_t(256)));
 
                         if (bdelta[lid] > 0){
                             for (int b = bsum[lid]; b < bg_end; b++) {
@@ -428,11 +432,13 @@ namespace SZ3 {
 //                                    printf("projected l2 delta = %.10G\n", l2_diff[lid * bsize + b]);
                                 uchar const *bg_data = data_lb[lid * bsize + b];
                                 size_t bg_len = size_lb[lid * bsize + b];
-                                lossless_decode_bitgroup(b, bg_data, bg_len, quant_size, lid);
+                                lossless_decode_bitgroup(b, bg_data, bg_len, quant_size, lid, loaded_bits);
                                 // printf("--------[Log] bitGroup_len = %d\n", bg_len);
                             }
                         }
                         // level_cnt++; 
+                        add_to_quant(quant_inds, loaded_bits, bsum[lid], bg_end);
+                        ::operator delete(loaded_bits, std::align_val_t(256));
                         totalTime += timer2.stop();
                         
                     }
@@ -662,9 +668,12 @@ namespace SZ3 {
         double max_error;
 //        T eb;
         void
-        lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size, int lid) {
-            // Timer timer(true);
-            // double totalTime = 0;
+        lossless_decode_bitgroup(int bg, uchar const *data_pos, const size_t data_length, const size_t quant_size, int lid, uchar* loaded_bits) {
+            Timer timer(true);
+            Timer timer2(true);
+
+            timer.start();
+            double totalTime = 0;
 
             size_t length = data_length;
             retrieved_size += length;
@@ -713,12 +722,15 @@ namespace SZ3 {
 
             if(b >= 0) {
                 // invert_table(pred_table_0, pred_table_1, quant_ind_truncated, b, lid);
-                invert_table(pred_table_0, pred_table_1, compressed_data, length, lid);
+                invert_table(pred_table_0, pred_table_1, compressed_data, length, lid, loaded_bits, b);
 
             }
+
             delete[] compressed_data;
+            timer2.start();
             
-            add_to_quant(quant_inds, last_bit[lid], bitshift);
+            // add_to_quant(quant_inds, last_bit[lid], bitshift);
+            totalTime += timer2.stop();
 
             // std::cout << "------[Log] quant size = " << quant_size << std::endl;
             // for (int i = 0; i < quant_size; i++) {
@@ -727,6 +739,7 @@ namespace SZ3 {
             // int realBlock = quant_size / 8;
 
             // std::cout << "decoding time = " << totalTime << std::endl;
+            // std::cout << "part x decoding time percent = " << totalTime / timer.stop() << std::endl;
 
         }
 
@@ -742,7 +755,6 @@ namespace SZ3 {
 
             uchar* buffer = static_cast<uchar*>(::operator new(buffer_size, std::align_val_t(256)));
 
-            timer.start();      
             double totalTime = 0;     
             // {   // convert quant_inds to negabinary based
             //     // int one_cnt = 0;
@@ -767,9 +779,9 @@ namespace SZ3 {
             // std::cout << "bit prediction time: " << timer.stop() << std::endl;
 
             // timer.start();
+
             convert_table(pred_table_0, pred_table_1, quant_inds);
             // std::cout << "bit convertion time: " << timer.stop() << std::endl;
-            totalTime += timer.stop();
 
             double l2_error_base = 0;
             {   // calc the total l2 error
@@ -784,14 +796,21 @@ namespace SZ3 {
             int shift = 0;
 
             size_t bitPlane_size = 0;
+            timer.start();      
+
+
             uchar* buffer_bp = bitTranspose8(quant_inds);
+            // uint64_t* buffer_bp = bitTranspose64(quant_inds);
+            totalTime += timer.stop();
 
             int numofEachBitPlane = (qsize + 7) / 8;
+            // int numofEachBitPlane = (qsize + 63) / 64;
             // for (int b = bsize - 1; b >= 0; b--) {
             for (int b = 0; b < bsize; b++) {
                 // timer.start();
                 uchar *buffer_pos = buffer;
                 uchar *buffer_bp_pos = buffer_bp + b * numofEachBitPlane;
+                // uint64_t *buffer_bp_pos = buffer_bp + b * numofEachBitPlane;
                 // write((size_t) qsize, buffer_pos);
 
                 double l2_error = 0;
@@ -815,7 +834,7 @@ namespace SZ3 {
                     // write(pred_table_0, lossless_data_pos_pos);
                     // write(pred_table_1, lossless_data_pos_pos);   
                     size_t size = lossless.compress(
-                            buffer_bp_pos, numofEachBitPlane, lossless_data_pos_pos);
+                            (uchar*) buffer_bp_pos, numofEachBitPlane, lossless_data_pos_pos);
     //                printf("%d %lu, ", bitgroup[b], size);
                     // size += sizeof(int32_t) * 2;
                     total_size += size;
@@ -1391,14 +1410,17 @@ namespace SZ3 {
 
 
 
-        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid) {
+        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid, uchar* loaded_bits, int b) {
             // #pragma omp parallel for
             for(int i = 0; i < length; i++) {
-                uchar temp = buffer[i] ^ last_bit[lid][i];
-                buffer[i] = temp;
-                last_bit[lid][i] = temp;
+                buffer[i] ^= last_bit[lid][i];
+                // last_bit[lid][i] = temp;
             }
-            // uchar* last_bit_lid = &last_bit[lid][0];
+
+            memcpy(last_bit[lid].data(), buffer, length);
+            memcpy(loaded_bits + b * length, buffer, length);
+
+            // uchar* last_bit_lid = last_bit[lid].data();
 
             // int i = 0;
             // for (; i <= length - 32; i += 32) {
