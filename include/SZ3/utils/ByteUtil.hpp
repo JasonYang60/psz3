@@ -339,7 +339,6 @@ std::vector<T> bytes2vector(const unsigned char *&c, uint8_t bit_width, size_t n
     return data;
 }
 
-
 inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
 {
     if (in.size() % 8 != 0) {
@@ -353,36 +352,69 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
 
     uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
     // #pragma omp parallel for
-    for (size_t b = 0; b < nBlocks; b++) {
-        size_t baseIn = b * blockSize;
-        size_t baseOut = b * bitsPerInt;
-
-        int in_0 = in[baseIn + 0];
-        int in_1 = in[baseIn + 1];
-        int in_2 = in[baseIn + 2];
-        int in_3 = in[baseIn + 3];
-        int in_4 = in[baseIn + 4];
-        int in_5 = in[baseIn + 5];
-        int in_6 = in[baseIn + 6];
-        int in_7 = in[baseIn + 7];
-
-        for(int bit = 0; bit < bitsPerInt; bit++){
-            out[bit * nBlocks + b] = ((in_0 & 1u) << 7) | ((in_1 & 1u) << 6) | ((in_2 & 1u) << 5) | ((in_3 & 1u) << 4)
-                | ((in_4 & 1u) << 3) | ((in_5 & 1u) << 2) | ((in_6 & 1u) << 1) | ((in_7 & 1u));
-            
-            in_0 >>= 1;
-            in_1 >>= 1;
-            in_2 >>= 1;
-            in_3 >>= 1;
-            in_4 >>= 1;
-            in_5 >>= 1;
-            in_6 >>= 1;
-            in_7 >>= 1;
+    for(size_t bit = 0; bit  < bitsPerInt; bit++) {
+        uint32_t mask = 1 << bit;
+        for(size_t b = 0; b < nBlocks; b++) {
+            size_t baseIn = b * blockSize;
+            uint32_t in_0 = (in[baseIn + 0] & mask) >> bit;
+            uint32_t in_1 = (in[baseIn + 1] & mask) >> bit;
+            uint32_t in_2 = (in[baseIn + 2] & mask) >> bit;
+            uint32_t in_3 = (in[baseIn + 3] & mask) >> bit;
+            uint32_t in_4 = (in[baseIn + 4] & mask) >> bit;
+            uint32_t in_5 = (in[baseIn + 5] & mask) >> bit;
+            uint32_t in_6 = (in[baseIn + 6] & mask) >> bit;
+            uint32_t in_7 = (in[baseIn + 7] & mask) >> bit;
+            out[bit * nBlocks + b] = (in_0 << 7) | (in_1 << 6) | (in_2 << 5) | (in_3 << 4)
+                | (in_4 << 3) | (in_5 << 2) | (in_6 << 1) | ((in_7 & 1u));
         }
     }
 
     return out;
 }
+
+// inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
+// {
+//     if (in.size() % 8 != 0) {
+//         int res = 8 - in.size() % 8;
+//         for(int i = 0; i < res; i++) {in.push_back(0); }
+//     }
+
+//     const size_t blockSize = 8;     
+//     const size_t bitsPerInt = 32;   
+//     size_t nBlocks = in.size() / blockSize + 1;
+
+//     uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
+//     // #pragma omp parallel for
+//     for (size_t b = 0; b < nBlocks; b++) {
+//         size_t baseIn = b * blockSize;
+//         size_t baseOut = b * bitsPerInt;
+
+//         int in_0 = in[baseIn + 0];
+//         int in_1 = in[baseIn + 1];
+//         int in_2 = in[baseIn + 2];
+//         int in_3 = in[baseIn + 3];
+//         int in_4 = in[baseIn + 4];
+//         int in_5 = in[baseIn + 5];
+//         int in_6 = in[baseIn + 6];
+//         int in_7 = in[baseIn + 7];
+
+//         for(int bit = 0; bit < bitsPerInt; bit++){
+//             out[bit * nBlocks + b] = ((in_0 & 1u) << 7) | ((in_1 & 1u) << 6) | ((in_2 & 1u) << 5) | ((in_3 & 1u) << 4)
+//                 | ((in_4 & 1u) << 3) | ((in_5 & 1u) << 2) | ((in_6 & 1u) << 1) | ((in_7 & 1u));
+            
+//             in_0 >>= 1;
+//             in_1 >>= 1;
+//             in_2 >>= 1;
+//             in_3 >>= 1;
+//             in_4 >>= 1;
+//             in_5 >>= 1;
+//             in_6 >>= 1;
+//             in_7 >>= 1;
+//         }
+//     }
+
+//     return out;
+// }
 
 
 inline void add_to_quant(aligned_vector<int32_t>& quant_inds, const aligned_vector<uchar>& bytes, int bitshift) {
