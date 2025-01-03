@@ -1411,19 +1411,19 @@ namespace SZ3 {
 
 
         void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid, uchar* loaded_bits, int b) {
-            // #pragma omp parallel for
             uchar * loaded_bits_pos = nullptr;
             if(b > 0) {
                 loaded_bits_pos = loaded_bits + (b - 1) * length;
+                // #pragma omp parallel for
                 for(int i = 0; i < length; i++) {
                     // buffer[i] ^= last_bit[lid][i];
                     buffer[i] ^= loaded_bits_pos[i];
                     // last_bit[lid][i] = temp;
                 }
-                // memcpy(last_bit[lid].data(), buffer, length);
+                memcpy(last_bit[lid].data(), buffer, length);
                 memcpy(loaded_bits_pos + length, buffer, length);
             } else {
-                // memcpy(last_bit[lid].data(), buffer, length);
+                memcpy(last_bit[lid].data(), buffer, length);
                 memcpy(loaded_bits, buffer, length);
             }
             // uchar * loaded_bits_pos = loaded_bits + (b - 1) * length;
