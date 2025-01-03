@@ -351,7 +351,7 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
     const size_t bitsPerInt = 32;   
     size_t nBlocks = in.size() / blockSize;
 
-    uchar* out = new uchar[nBlocks * bitsPerInt];
+    uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
     // #pragma omp parallel for
     for (size_t b = 0; b < nBlocks; b++) {
         size_t baseIn = b * blockSize;
@@ -385,13 +385,14 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
 }
 
 
-inline void add_to_quant(aligned_vector<int32_t>& quant_inds, const std::vector<uchar>& bytes, int bitshift) {
-    size_t i = 0, b = 0;
+inline void add_to_quant(aligned_vector<int32_t>& quant_inds, const aligned_vector<uchar>& bytes, int bitshift) {
     size_t intLen = quant_inds.size();
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
 
     int mod8 = intLen % 8;
-    for (; b < (mod8 == 0 ? byteLen : byteLen - 1); b++, i += 8) {
+    // #pragma omp parallel for
+    for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
+        size_t i = b * 8;
         quant_inds[i] += ((uint32_t) ((bytes[b] & 0x80) >> 7)) << bitshift;
         quant_inds[i + 1] += ((uint32_t) ((bytes[b] & 0x40) >> 6)) << bitshift;
         quant_inds[i + 2] += ((uint32_t) ((bytes[b] & 0x20) >> 5)) << bitshift;
@@ -401,6 +402,8 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, const std::vector<
         quant_inds[i + 6] += ((uint32_t) ((bytes[b] & 0x02) >> 1)) << bitshift;
         quant_inds[i + 7] += ((uint32_t) ((bytes[b] & 0x01))) << bitshift;
     }
+
+    size_t i = intLen / 8 * 8, b = (mod8 == 0 ? byteLen : byteLen - 1);
     if (mod8 > 0) {
         if (mod8 >= 1) {
             quant_inds[i] += ((uint32_t) ((bytes[b] & 0x80) >> 7)) << bitshift;

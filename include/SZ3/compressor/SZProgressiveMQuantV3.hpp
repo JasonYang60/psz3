@@ -18,6 +18,7 @@
 #include "SZ3/def.hpp"
 #include <cstring>
 #include <cmath>
+// #include <immintrin.h>
 
 namespace SZ3 {
     template<class T, uint N, class Quantizer, class Encoder, class Lossless>
@@ -82,7 +83,8 @@ namespace SZ3 {
             for(auto &eb : targetEBs){
                 eb *= range;    // relative error bound
             }
-            T *dec_data = new T[num_elements];
+            T *dec_data = static_cast<T*>(::operator new(num_elements * sizeof(T), std::align_val_t(256)));
+
             if(targetEBs.empty()){
                 std::cout << "[error]target error bound is empty." << std::endl;
                 return dec_data;
@@ -626,7 +628,7 @@ namespace SZ3 {
         std::vector<std::string> interpolators;
         aligned_vector<int32_t> quant_inds;
         // std::vector<std::vector<int>> last_bit;
-        std::vector<std::vector<uchar>> last_bit;
+        std::vector<aligned_vector<uchar>> last_bit;
         std::vector<T> error;
         std::vector<T> l2_diff;
         size_t quant_cnt = 0; // for decompress
@@ -670,11 +672,12 @@ namespace SZ3 {
 
             uint32_t pred_table_0 = 0;
             uint32_t pred_table_1 = 0;
-            read(pred_table_0, data_pos, length);
-            read(pred_table_1, data_pos, length);
+            // read(pred_table_0, data_pos, length);
+            // read(pred_table_1, data_pos, length);
 
             size_t rSize = lossless.getFrameConteneSize(data_pos, length);
-            uchar * compressed_data = new uchar[rSize];
+            uchar * compressed_data = static_cast<uchar*>(::operator new(rSize, std::align_val_t(256)));
+
             length = lossless.decompress(data_pos, length, compressed_data, rSize);
 
             uchar const *compressed_data_pos = compressed_data;            
@@ -734,8 +737,10 @@ namespace SZ3 {
             size_t qsize = quant_inds.size();
             std::vector<int> quants(qsize);
 
-            uchar *buffer = new uchar[size_t((quant_inds.size() < 1000000 ? 10 : 1.2)
-                                             * quant_inds.size()) * sizeof(T)];
+            double multiplier = (quant_inds.size() < 1000000) ? 10.0 : 1.2;
+            size_t buffer_size = static_cast<size_t>(multiplier * quant_inds.size()) * sizeof(T);
+
+            uchar* buffer = static_cast<uchar*>(::operator new(buffer_size, std::align_val_t(256)));
 
             timer.start();      
             double totalTime = 0;     
@@ -807,12 +812,12 @@ namespace SZ3 {
                 
 
                 if(quants.size() > 0){    
-                    write(pred_table_0, lossless_data_pos_pos);
-                    write(pred_table_1, lossless_data_pos_pos);   
+                    // write(pred_table_0, lossless_data_pos_pos);
+                    // write(pred_table_1, lossless_data_pos_pos);   
                     size_t size = lossless.compress(
                             buffer_bp_pos, numofEachBitPlane, lossless_data_pos_pos);
     //                printf("%d %lu, ", bitgroup[b], size);
-                    size += sizeof(int32_t) * 2;
+                    // size += sizeof(int32_t) * 2;
                     total_size += size;
                     lossless_data_pos += size;
                     lossless_size.push_back(size);
@@ -1384,13 +1389,33 @@ namespace SZ3 {
         //     last_bit[lid] = quant_ind_truncated;
         // }
 
-            
-        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid) {
 
+
+        void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid) {
+            // #pragma omp parallel for
             for(int i = 0; i < length; i++) {
-                buffer[i] ^= last_bit[lid][i];
-                last_bit[lid][i] = buffer[i];
+                uchar temp = buffer[i] ^ last_bit[lid][i];
+                buffer[i] = temp;
+                last_bit[lid][i] = temp;
             }
+            // uchar* last_bit_lid = &last_bit[lid][0];
+
+            // int i = 0;
+            // for (; i <= length - 32; i += 32) {
+            //     __m256i buf = _mm256_load_si256((__m256i*)&buffer[i]);
+            //     __m256i last = _mm256_load_si256((__m256i*)&last_bit_lid[i]);
+
+            //     __m256i result = _mm256_xor_si256(buf, last);
+
+            //     _mm256_store_si256((__m256i*)&buffer[i], result);
+            //     _mm256_store_si256((__m256i*)&last_bit_lid[i], result);
+            // }
+
+            // for (; i < length; i++) {
+            //     buffer[i] ^= last_bit_lid[i];
+            //     last_bit_lid[i] = buffer[i];
+            // }
+            
         }
     };
 };

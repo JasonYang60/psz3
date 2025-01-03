@@ -56,7 +56,12 @@ namespace SZ3 {
         num = fin.tellg() / sizeof(Type);
         fin.seekg(0, std::ios::beg);
 //        auto data = SZ3::compat::make_unique<Type[]>(num_elements);
-        auto data = std::make_unique<Type[]>(num);
+
+        size_t alignment = 256; 
+        Type* raw_ptr = static_cast<Type*>(::operator new(num * sizeof(Type), std::align_val_t(alignment)));
+        std::unique_ptr<Type[]> data(raw_ptr);
+
+        // auto data = std::make_unique<Type[]>(num);
         fin.read(reinterpret_cast<char *>(&data[0]), num * sizeof(Type));
         fin.close();
         return data;
