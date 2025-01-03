@@ -340,7 +340,7 @@ std::vector<T> bytes2vector(const unsigned char *&c, uint8_t bit_width, size_t n
 }
 
 
-inline uchar* bitTranspose8(std::vector<int32_t> &in)
+inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
 {
     if (in.size() % 8 != 0) {
         int res = 8 - in.size() % 8;
@@ -385,7 +385,7 @@ inline uchar* bitTranspose8(std::vector<int32_t> &in)
 }
 
 
-inline void add_to_quant(std::vector<int32_t>& quant_inds, const std::vector<uchar>& bytes, int bitshift) {
+inline void add_to_quant(aligned_vector<int32_t>& quant_inds, const std::vector<uchar>& bytes, int bitshift) {
     size_t i = 0, b = 0;
     size_t intLen = quant_inds.size();
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
