@@ -24,6 +24,9 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
             "MinSizeRel" "RelWithDebInfo")
 endif ()
 
+include_directories("/home/zyang/boost/include")
+
+
 find_package(PkgConfig)
 
 configure_file(

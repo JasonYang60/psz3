@@ -353,6 +353,21 @@ namespace SZ3 {
             quantizer.postdecompress_data();
             // printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
 
+            // {
+            //     bool completed = true;
+            //     for(auto b : bsum) {
+            //         if(b != bitgroup.size()) {
+            //             completed = false;
+            //             break;
+            //         }
+            //     }
+            //     if(completed) {
+            //         for(auto &bits : last_bit) {
+            //             bits.clear();
+            //         }
+            //     }
+            // }
+
             return compressed_size;
             //decompress_progressive(dec_data, cmp_data_pos, prog_data_pos, lossless_size,
             //                    lossless_id, data, bsum, bdelta);
@@ -595,7 +610,7 @@ namespace SZ3 {
 //            quant_inds.clear();
             std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
             std::cout << "compress time = " << timer.stop() << std::endl;
-            std::cout << "total time = " << totalTime << std::endl;
+            std::cout << "encoding time = " << totalTime << std::endl;
             assert(quant_inds_total >= num_elements);
 
             // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
@@ -775,7 +790,7 @@ namespace SZ3 {
             uint32_t pred_table_0 = 0;
             uint32_t pred_table_1 = 0;
 
-            predict_table(pred_table_0, pred_table_1);
+            // predict_table(pred_table_0, pred_table_1);
             // std::cout << "bit prediction time: " << timer.stop() << std::endl;
 
             // timer.start();
@@ -856,7 +871,7 @@ namespace SZ3 {
             quant_inds.clear();
             // error.clear();
 
-            std::cout << "encoding time: " << totalTime << std::endl;
+            // std::cout << "encoding time: " << totalTime << std::endl;
 
             return total_size;
         }
@@ -1416,8 +1431,8 @@ namespace SZ3 {
                 loaded_bits_pos = loaded_bits + (b - 1) * length;
                 // #pragma omp parallel for
                 for(int i = 0; i < length; i++) {
-                    // buffer[i] ^= last_bit[lid][i];
-                    buffer[i] ^= loaded_bits_pos[i];
+                    buffer[i] ^= last_bit[lid][i];
+                    // buffer[i] ^= loaded_bits_pos[i];
                     // last_bit[lid][i] = temp;
                 }
                 memcpy(last_bit[lid].data(), buffer, length);

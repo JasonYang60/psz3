@@ -351,7 +351,7 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
     size_t nBlocks = in.size() / blockSize;
 
     uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for(size_t bit = 0; bit  < bitsPerInt; bit++) {
         uint32_t mask = 1 << bit;
         for(size_t b = 0; b < nBlocks; b++) {
@@ -594,7 +594,7 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
 
     int mod8 = intLen % 8;
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
         // size_t i = b * 8;
         // uchar temp[32] = {0};

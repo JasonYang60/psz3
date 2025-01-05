@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <boost/align/aligned_allocator.hpp>
+#include <vector>
 
 namespace SZ3 {
 
