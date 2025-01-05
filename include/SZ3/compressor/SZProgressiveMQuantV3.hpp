@@ -74,6 +74,7 @@ namespace SZ3 {
 
             level_progressive = levels;
             last_bit.resize(level_progressive * N);
+            second_last_bit.resize(level_progressive * N);
             
         }
 
@@ -438,6 +439,7 @@ namespace SZ3 {
 
                         size_t compressed_bit_package_size = (quant_size + 7) / 8;
                         last_bit[lid].resize(compressed_bit_package_size, 0);
+                        second_last_bit[lid].resize(compressed_bit_package_size, 0);
 
                         uchar* loaded_bits = static_cast<uchar*>(::operator new(compressed_bit_package_size * 32, std::align_val_t(256)));
 
@@ -650,6 +652,7 @@ namespace SZ3 {
         aligned_vector<int32_t> quant_inds;
         // std::vector<std::vector<int>> last_bit;
         std::vector<aligned_vector<uchar>> last_bit;
+        std::vector<aligned_vector<uchar>> second_last_bit;
         std::vector<T> error;
         std::vector<T> l2_diff;
         size_t quant_cnt = 0; // for decompress
@@ -1334,7 +1337,7 @@ namespace SZ3 {
                 // ebs = {(T)(1e-6)};
                 break;
             case 5:
-                ebs = {(T)(range * 1e-6 * 1024), (T)(range * 1e-6 * 256), (T)(range * 1e-6 * 8), (T)(range * 1e-6)};
+                ebs = {(T)(range * 1e-6 * 4096), (T)(range * 1e-6 * 256), (T)(range * 1e-6 * 16), (T)(range * 1e-6)};
                 // ebs = {(T)(1e-6)};
                 break;
             case 99:
@@ -1405,9 +1408,12 @@ namespace SZ3 {
                 // uint32_t sel = qt >> 1;
                 // uint32_t pred = (tab_1 & sel) | (tab_0 & ~sel);
                 // qt ^= pred;
+                // quants[i] = qt;
 
-                // quants[i] = (int)qt;
-                quants[i] ^= (((uint32_t)quants[i]) >> 1);
+                uint32_t temp = (uint32_t)quants[i];
+                temp ^= temp >> 1;
+                quants[i] ^= temp >> 1;
+                // quants[i] ^= (((uint32_t)quants[i]) >> 1);
             }
         }
 
@@ -1427,16 +1433,23 @@ namespace SZ3 {
 
         void invert_table(const uint32_t tab_0, const uint32_t tab_1, uchar* buffer, size_t length, int lid, uchar* loaded_bits, int b) {
             uchar * loaded_bits_pos = nullptr;
-            if(b > 0) {
+            if(b > 1) {
                 loaded_bits_pos = loaded_bits + (b - 1) * length;
                 // #pragma omp parallel for
                 for(int i = 0; i < length; i++) {
-                    buffer[i] ^= last_bit[lid][i];
+                    buffer[i] ^= second_last_bit[lid][i] ^ last_bit[lid][i];
+                    // buffer[i] ^= (tab_1 & last_bit[lid][i]) | (tab_0 & ~last_bit[lid][i]);
+                    
                     // buffer[i] ^= loaded_bits_pos[i];
                     // last_bit[lid][i] = temp;
                 }
+                memcpy(second_last_bit[lid].data(), last_bit[lid].data(), length);
                 memcpy(last_bit[lid].data(), buffer, length);
                 memcpy(loaded_bits_pos + length, buffer, length);
+            } else if(b > 0) {
+                memcpy(second_last_bit[lid].data(), last_bit[lid].data(), length);
+                memcpy(last_bit[lid].data(), buffer, length);
+                memcpy(loaded_bits + length, buffer, length);
             } else {
                 memcpy(last_bit[lid].data(), buffer, length);
                 memcpy(loaded_bits, buffer, length);
