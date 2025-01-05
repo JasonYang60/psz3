@@ -790,7 +790,7 @@ namespace SZ3 {
             uint32_t pred_table_0 = 0;
             uint32_t pred_table_1 = 0;
 
-            // predict_table(pred_table_0, pred_table_1);
+            predict_table(pred_table_0, pred_table_1);
             // std::cout << "bit prediction time: " << timer.stop() << std::endl;
 
             // timer.start();
@@ -1364,7 +1364,7 @@ namespace SZ3 {
                 // #pragma omp for
                 for(int i = 0; i < sz; i++) {
                     
-                    // quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+                    quant_inds[i] = ((int32_t) quant_inds[i] + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
                     // uint32_t qt = quant_inds[i];
                     // for(int b = 0; b < 31; b++) {
                     //     uint32_t bits = (qt >> 30) & 0x3;

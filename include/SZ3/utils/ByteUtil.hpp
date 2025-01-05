@@ -611,7 +611,7 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits
         //     quant_inds[i + ii] |= adder[ii];
         // }
         size_t i = b * 8;
-        int32_t adder[8] = {0};
+        uint32_t adder[8] = {0};
 
         for(int bit = b_start; bit < b_end; bit++) {
             uchar loaded = loaded_bits[bit * byteLen + b];
@@ -631,14 +631,15 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits
         // for(int ii = 0; ii < 8; ii++) {
         //     quant_inds[i + ii] |= adder[ii];
         // }
-        quant_inds[i] |= adder[0];
-        quant_inds[i + 1] |= adder[1];
-        quant_inds[i + 2] |= adder[2];
-        quant_inds[i + 3] |= adder[3];
-        quant_inds[i + 4] |= adder[4];
-        quant_inds[i + 5] |= adder[5];
-        quant_inds[i + 6] |= adder[6];
-        quant_inds[i + 7] |= adder[7];
+
+        quant_inds[i] += (adder[0] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 1] += (adder[1] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 2] += (adder[2] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 3] += (adder[3] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 4] += (adder[4] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 5] += (adder[5] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 6] += (adder[6] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
+        quant_inds[i + 7] += (adder[7] ^ 0xaaaaaaaau) - 0xaaaaaaaau;
 
 
         // quant_inds[i + 1] += ((temp & 0x40) >> 6) << bitshift;
@@ -665,49 +666,49 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_0 |= ((uint32_t)((temp[bit] & (0x80 >> 0)) >> (7 - 0))) << (31 - bit);
             }
-            quant_inds[i] |= adder_0;
+            quant_inds[i] += (adder_0 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
         if (mod8 >= 2) {
             int32_t adder_1 = 0;
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_1 |= ((uint32_t)((temp[bit] & (0x80 >> 1)) >> (7 - 1))) << (31 - bit);
             }
-            quant_inds[i + 1] |= adder_1;
+            quant_inds[i + 1] += (adder_1 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
         if (mod8 >= 3) {
             int32_t adder_2 = 0;
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_2 |= ((uint32_t)((temp[bit] & (0x80 >> 2)) >> (7 - 2))) << (31 - bit);
             }
-            quant_inds[i + 2] |= adder_2;
+            quant_inds[i + 2] += (adder_2 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
         if (mod8 >= 4) {
             int32_t adder_3 = 0;
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_3 |= ((uint32_t)((temp[bit] & (0x80 >> 3)) >> (7 - 3))) << (31 - bit);
             }
-            quant_inds[i + 3] |= adder_3;
+            quant_inds[i + 3] += (adder_3 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
         if (mod8 >= 5) {
             int32_t adder_4 = 0;
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_4 |= ((uint32_t)((temp[bit] & (0x80 >> 4)) >> (7 - 4))) << (31 - bit);
             }
-            quant_inds[i + 4] |= adder_4;
+            quant_inds[i + 4] += (adder_4 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
         if (mod8 >= 6) {
             int32_t adder_5 = 0;
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_5 |= ((uint32_t)((temp[bit] & (0x80 >> 5)) >> (7 - 5))) << (31 - bit);
             }
-            quant_inds[i + 5] |= adder_5;
+            quant_inds[i + 5] += (adder_5 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
         if (mod8 >= 7) {
             int32_t adder_6 = 0;
             for(int bit = b_start; bit < b_end; bit++) {
                 adder_6 |= ((uint32_t)((temp[bit] & (0x80 >> 6)) >> (7 - 6))) << (31 - bit);
             }
-            quant_inds[i + 6] |= adder_6;
+            quant_inds[i + 6] += (adder_6 ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
 
     }
