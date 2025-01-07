@@ -5,7 +5,7 @@
 #include "SZ3/utils/Statistic.hpp"
 #include "SZ3/utils/Config.hpp"
 #include "SZ3/api/impl/SZAlgoInterp.hpp"
-#include "SZ3/api/impl/SZAlgoInterpProgressive.hpp"
+// #include "SZ3/api/impl/SZAlgoInterpProgressive.hpp"
 #include "SZ3/api/impl/SZAlgoLorenzoReg.hpp"
 #include "SZ3/api/impl/SZAlgo.hpp"
 #include <cmath>
@@ -24,7 +24,7 @@ namespace SZ3 {
         } else if (conf.cmprAlgo == ALGO_LORENZO_REG) {
             return SZ_compress_LorenzoReg<T, N>(conf, data, cmpData, cmpCap);
         } else if (conf.cmprAlgo == ALGO_INTERP) {
-            // return SZ_compress_Interp<T, N>(conf, data, cmpData, cmpCap);
+            // return SZ_compress_Interp_nega_corel<T, N>(conf, data, cmpData, cmpCap);
             return SZ_compress_Interp<T, N>(conf, data, cmpData, cmpCap);
         } else if (conf.cmprAlgo == ALGO_INTERP_LORENZO) {
             return SZ_compress_Interp_lorenzo<T, N>(conf, data, cmpData, cmpCap);
@@ -44,8 +44,8 @@ namespace SZ3 {
         } else if (conf.cmprAlgo == ALGO_LORENZO_REG) {
             SZ_decompress_LorenzoReg<T, N>(conf, cmpData, cmpSize, decData);
         } else if (conf.cmprAlgo == ALGO_INTERP) {
-            // SZ_decompress_Interp<T, N>(conf, cmpData, cmpSize, decData);
-            SZ_decompress_Interp_nega_corel<T, N>(conf, cmpData, cmpSize, decData);
+            SZ_decompress_Interp<T, N>(conf, cmpData, cmpSize, decData);
+            // SZ_decompress_Interp_nega_corel<T, N>(conf, cmpData, cmpSize, decData);
         } else if (conf.cmprAlgo == ALGO_NOPRED) {
             SZ_decompress_nopred<T, N>(conf, cmpData, cmpSize, decData);
         } else {

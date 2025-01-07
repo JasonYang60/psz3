@@ -372,6 +372,39 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
     return out;
 }
 
+inline uchar* bitTranspose8inverse(aligned_vector<int32_t> &in)
+{
+    if (in.size() % 8 != 0) {
+        int res = 8 - in.size() % 8;
+        for(int i = 0; i < res; i++) {in.push_back(0); }
+    }
+
+    const size_t blockSize = 8;     
+    const size_t bitsPerInt = 32;   
+    size_t nBlocks = in.size() / blockSize;
+
+    uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
+    #pragma omp parallel for
+    for(size_t bit = 0; bit  < bitsPerInt; bit++) {
+        uint32_t mask = 1 << (bitsPerInt - bit - 1);
+        for(size_t b = 0; b < nBlocks; b++) {
+            size_t baseIn = b * blockSize;
+            uint32_t in_0 = (in[baseIn + 0] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_1 = (in[baseIn + 1] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_2 = (in[baseIn + 2] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_3 = (in[baseIn + 3] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_4 = (in[baseIn + 4] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_5 = (in[baseIn + 5] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_6 = (in[baseIn + 6] & mask) >> (bitsPerInt - bit - 1);
+            uint32_t in_7 = (in[baseIn + 7] & mask) >> (bitsPerInt - bit - 1);
+            out[bit * nBlocks + b] = (in_0 << 7) | (in_1 << 6) | (in_2 << 5) | (in_3 << 4)
+                | (in_4 << 3) | (in_5 << 2) | (in_6 << 1) | ((in_7 & 1u));
+        }
+    }
+
+    return out;
+}
+
 inline uint64_t* bitTranspose64(aligned_vector<int32_t> &in)
 {
     if (in.size() % 64 != 0) {
@@ -714,6 +747,130 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits
     }
 }
 
+inline void add_to_quant_ori(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits, int b_start, int b_end) {
+    size_t intLen = quant_inds.size();
+    size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
+
+    int mod8 = intLen % 8;
+    #pragma omp parallel for
+    for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
+        // size_t i = b * 8;
+        // uchar temp[32] = {0};
+        // int32_t adder[8] = {0};
+        // for(int bit = b_start; bit < b_end; bit++) {
+        //     temp[bit] = loaded_bits[bit * byteLen + b];
+        // }
+        // for(int bit = b_start; bit < b_end; bit++) {
+        //     for(int ii = 0; ii < 8; ii++) {
+        //         adder[ii] |= ((uint32_t)((temp[bit] & (0x80 >> ii)) >> (7 - ii))) << (31 - bit);
+        //     }
+        // }
+        // for(int ii = 0; ii < 8; ii++) {
+        //     quant_inds[i + ii] |= adder[ii];
+        // }
+        size_t i = b * 8;
+        uint32_t adder[8] = {0};
+
+        for(int bit = b_start; bit < b_end; bit++) {
+            uchar loaded = loaded_bits[bit * byteLen + b];
+            uint32_t mask = 1U << (31 - bit);
+
+            // 使用位操作一次性处理所有 8 个 bits
+            adder[0] |= (loaded & (0x80)) ? mask : 0;
+            adder[1] |= (loaded & (0x40)) ? mask : 0;
+            adder[2] |= (loaded & (0x20)) ? mask : 0;
+            adder[3] |= (loaded & (0x10)) ? mask : 0;
+            adder[4] |= (loaded & (0x08)) ? mask : 0;
+            adder[5] |= (loaded & (0x04)) ? mask : 0;
+            adder[6] |= (loaded & (0x02)) ? mask : 0;
+            adder[7] |= (loaded & (0x01)) ? mask : 0;
+        }
+
+        // for(int ii = 0; ii < 8; ii++) {
+        //     quant_inds[i + ii] |= adder[ii];
+        // }
+
+        quant_inds[i] |= adder[0];
+        quant_inds[i + 1] += adder[1];
+        quant_inds[i + 2] += adder[2];
+        quant_inds[i + 3] += adder[3];
+        quant_inds[i + 4] += adder[4];
+        quant_inds[i + 5] += adder[5];
+        quant_inds[i + 6] += adder[6];
+        quant_inds[i + 7] += adder[7];
+
+
+        // quant_inds[i + 1] += ((temp & 0x40) >> 6) << bitshift;
+        // quant_inds[i + 2] += ((temp & 0x20) >> 5) << bitshift;
+        // quant_inds[i + 3] += ((temp & 0x10) >> 4) << bitshift;
+        // quant_inds[i + 4] += ((temp & 0x08) >> 3) << bitshift;
+        // quant_inds[i + 5] += ((temp & 0x04) >> 2) << bitshift;
+        // quant_inds[i + 6] += ((temp & 0x02) >> 1) << bitshift;
+        // quant_inds[i + 7] += ((temp & 0x01)) << bitshift;
+        // uint32_t masks[8] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
+        // for (size_t j = 0; j < 8; ++j) {
+        //     quant_inds[i + j] |= ((temp & masks[j]) >> (7 - j)) << bitshift;
+        // }
+    }
+
+    size_t i = intLen / 8 * 8, b = (mod8 == 0 ? byteLen : byteLen - 1);
+    if (mod8 > 0) {
+        uchar temp[32] = {0};
+        for(int bit = b_start; bit < b_end; bit++) {
+            temp[bit] = loaded_bits[bit * byteLen + b];
+        }
+        if (mod8 >= 1) {
+            int32_t adder_0 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_0 |= ((uint32_t)((temp[bit] & (0x80 >> 0)) >> (7 - 0))) << (31 - bit);
+            }
+            quant_inds[i] |= adder_0;
+        }
+        if (mod8 >= 2) {
+            int32_t adder_1 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_1 |= ((uint32_t)((temp[bit] & (0x80 >> 1)) >> (7 - 1))) << (31 - bit);
+            }
+            quant_inds[i + 1] += adder_1;
+        }
+        if (mod8 >= 3) {
+            int32_t adder_2 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_2 |= ((uint32_t)((temp[bit] & (0x80 >> 2)) >> (7 - 2))) << (31 - bit);
+            }
+            quant_inds[i + 2] += adder_2;
+        }
+        if (mod8 >= 4) {
+            int32_t adder_3 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_3 |= ((uint32_t)((temp[bit] & (0x80 >> 3)) >> (7 - 3))) << (31 - bit);
+            }
+            quant_inds[i + 3] += adder_3;
+        }
+        if (mod8 >= 5) {
+            int32_t adder_4 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_4 |= ((uint32_t)((temp[bit] & (0x80 >> 4)) >> (7 - 4))) << (31 - bit);
+            }
+            quant_inds[i + 4] += adder_4;
+        }
+        if (mod8 >= 6) {
+            int32_t adder_5 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_5 |= ((uint32_t)((temp[bit] & (0x80 >> 5)) >> (7 - 5))) << (31 - bit);
+            }
+            quant_inds[i + 5] += adder_5;
+        }
+        if (mod8 >= 7) {
+            int32_t adder_6 = 0;
+            for(int bit = b_start; bit < b_end; bit++) {
+                adder_6 |= ((uint32_t)((temp[bit] & (0x80 >> 6)) >> (7 - 6))) << (31 - bit);
+            }
+            quant_inds[i + 6] += adder_6;
+        }
+
+    }
+}
 
 };      // namespace SZ3
 #endif  // SZ3_BYTEUTIL_HPP

@@ -78,7 +78,7 @@ namespace SZ3 {
             
         }
 
-        T *decompress(uchar const *lossless_data, T *data, std::vector<T> &targetEBs) {
+        T *decompress(uchar const *lossless_data, T *data, std::vector<double> &targetEBs) {
             setupLayers(data);
             printf("range = %f\n", range);
             for(auto &eb : targetEBs){
@@ -1338,6 +1338,10 @@ namespace SZ3 {
                 break;
             case 5:
                 ebs = {(T)(range * 1e-6 * 4096), (T)(range * 1e-6 * 256), (T)(range * 1e-6 * 16), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 9:
+                ebs = {(T)(range * 1e-9)};
                 // ebs = {(T)(1e-6)};
                 break;
             case 99:

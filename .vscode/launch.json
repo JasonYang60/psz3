@@ -6,16 +6,20 @@
             // "type": "lldb",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/debug/test/sz_pinterp_mquant_v3", // 可执行文件路径
-            // "program": "${workspaceFolder}/debug/tools/sz3/sz3", // 可执行文件路径
+            // "program": "${workspaceFolder}/debug/test/sz_pinterp_mquant_v3", // 可执行文件路径
+            "program": "${workspaceFolder}/debug/tools/sz3/sz3", // 可执行文件路径
             // "args": ["/home/zyang/Desktop/datasets/pressure_2000_1008x1008x352.f32.dat", "-3", "1008","1008","352","1","1e-4","1","0","99","128",], // 传递给程序的命令行参数
             // "args": ["/home/zyang/Desktop/datasets/QC-98x1200x1200.log10.dat", "-3", "98","1200","1200","18", "4.64e-1", "2.15e-1", "1e-1", "4.64e-2", "2.15e-2", "1e-2", "4.64e-3", "2.15e-3", "1e-3", "4.64e-4", "2.15e-4", "1e-4", "4.64e-5", "2.15e-5", "1e-5", "4.64e-6", "2.15e-6", "1e-6", "1", "0", "3", "128",], // 传递给程序的命令行参数
-            // "args": ["${workspaceFolder}/debug/velocity_x.dat", "-3", "512","512","512","1", "1e-6", "1", "0", "1", "128",], // 传递给程序的命令行参数
-            "args": ["/home/zyang/Desktop/datasets/velocity_x.dat", "-3", "512", "512", "512", "4", "4096e-6","256e-6","16e-6","1e-6", "1", "0", "5","128",], // 传递给程序的命令行参数
+            // "args": ["/home/zyang/Desktop/datasets/density.d64", "-d", "-3", "256","384","384","1", "1e-9", "1", "9", "0",], // 传递给程序的命令行参数
+            // "args": ["/home/zyang/Desktop/datasets/pressure.d64", "-d", "-3", "256","384","384","1", "1e-9", "1", "9", "0",], // 传递给程序的命令行参数
+            // "args": ["/home/zyang/Desktop/datasets/velocityx.d64", "-d", "-3", "256","384","384","1", "1e-9", "1", "9", "0",], // 传递给程序的命令行参数
+            // "args": ["/home/zyang/Desktop/datasets/Uf48.f64.bin.dat", "-d", "-3", "100","500","500","1", "1e-9", "1", "9", "0",], // 传递给程序的命令行参数
+            // "args": ["/home/zyang/Desktop/datasets/velocity_x.dat", "-f", "-3", "512","512","512","1", "1e-6", "1", "1", "0",], // 传递给程序的命令行参数
+            // "args": ["/home/zyang/Desktop/datasets/velocity_x.dat", "-3", "512", "512", "512", "4", "4096e-6","256e-6","16e-6","1e-6", "1", "0", "5","128",], // 传递给程序的命令行参数
             // "args": ["/home/zyang/Desktop/datasets/Uf48.bin.dat", "-3", "100","500","500","4", "4096e-6","256e-6","16e-6","1e-6", "1", "0", "1","128",,], // 传递给程序的命令行参数
             // "args": ["/home/zyang/Desktop/datasets/einspline_288_115_69_69.pre.f32.dat", "-4", "288","115","69","69", "3","1e-2","1e-3","1e-4","1","0","3","128",], // 传递给程序的命令行参数
-            // "args": ["-f", "-i", "/home/zyang/Desktop/datasets/velocity_x.dat", "-o","/home/zyang/Desktop/datasets/velocity_x.dat.sz.out", "-3", "512","512","512","-c", "${workspaceFolder}/debug/sz3.config", 
-            //         "-M", "REL", "1e-6", "-a"], // 传递给程序的命令行参数
+            "args": ["-d", "-i", "/home/zyang/Desktop/datasets/Uf48.f64.bin.dat", "-o","/home/zyang/Desktop/datasets/Uf48.f64.bin.dat.sz.out", "-3", "500","500","100","-c", "${workspaceFolder}/debug/sz3.config", 
+                    "-M", "REL", "1e-8", "-a"], // 传递给程序的命令行参数
                     // "-M", "REL", "1e-6", "-a", "-e", "3", "1e-4", "1e-5", "1e-6"], // 传递给程序的命令行参数
             "cwd": "${workspaceFolder}",
             // "miDebuggerPath": "/usr/bin/lldb",  // 明确指定 LLDB 路径

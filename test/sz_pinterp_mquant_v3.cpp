@@ -14,62 +14,62 @@
 #include <type_traits>
 #include <sstream>
 
-template<uint N, class ... Dims>
+template<uint N, typename T, class ... Dims>
 SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
-                                int layers, int block_size, double &compression_ratio, Dims ... args) {
+                                int layers, double &compression_ratio, size_t &total_compressed_size, Dims ... args) {
     std::vector<size_t> compressed_size;
-    size_t total_compressed_size = 0;
+    total_compressed_size = 0;
     SZ3::uchar *compressed;
 
     size_t num = 0;
-    auto data = SZ3::readfile<float>(path, num);
+    auto data = SZ3::readfile<T>(path, num);
     {
         std::cout << "****************** compression ****************" << std::endl;
         std::cout << "Interp op          = " << interp_op << std::endl
                   << "Direction          = " << direction_op << std::endl
                   << "Layers             = " << layers << std::endl
-                  << "Block size         = " << block_size << std::endl;
+                  << "Block size         = " << 0 << std::endl;
 
         SZ3::Timer timer(true);
         auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
-        auto sz = SZ3::SZProgressiveMQuant<float, N, SZ3::LinearQuantizer2<float>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
-                // SZ3::LinearQuantizer2<float>(num, eb, 524288),
-                SZ3::LinearQuantizer2<float>(num, 1), // the second arg is dummy.
+        auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
+                // SZ3::LinearQuantizer2<T>(num, eb, 524288),
+                SZ3::LinearQuantizer2<T>(num, 1), // the second arg is dummy.
                 SZ3::HuffmanEncoder<int>(),
                 // SZ3::ArithmeticEncoder<int>(),
                 SZ3::Lossless_zstd(3),
-                dims, interp_op, direction_op, 50000, layers, block_size
+                dims, interp_op, direction_op, 50000, layers, 0
         );
         compressed = sz.compress(data.get(), total_compressed_size);
         timer.stop("Compression");
 
         // total_compressed_size = std::accumulate(compressed_size.begin(), compressed_size.end(), (size_t) 0);
-        compression_ratio = num * sizeof(float) * 1.0 / total_compressed_size;
+        compression_ratio = num * sizeof(T) * 1.0 / total_compressed_size;
         std::cout << "Compressed size = " << total_compressed_size << std::endl;
         std::cout << "Compression ratio = " << compression_ratio << std::endl << std::endl;
     }
     return compressed;
 }
 
-template<uint N, class ... Dims>
-float *interp_decompress(const char *path, std::vector<float> & target_ebs, int interp_op, int direction_op,
-                                int layers, int block_size, SZ3::uchar * compressed, bool writeintoFile, Dims ... args){
+template<uint N, typename T, class ... Dims>
+T *interp_decompress(const char *path, std::vector<double> & target_ebs, int interp_op, int direction_op,
+                                int layers, SZ3::uchar * compressed, bool writeintoFile, Dims ... args){
     size_t num = 0;
-    auto data = SZ3::readfile<float>(path, num);
-    float * dec_data = nullptr;
+    auto data = SZ3::readfile<T>(path, num);
+    T * dec_data = nullptr;
 
     {
     std::cout << "****************** Decompression ****************" << std::endl;
 
     SZ3::Timer timer(true);
     auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
-    auto sz = SZ3::SZProgressiveMQuant<float, N, SZ3::LinearQuantizer2<float>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
-            // SZ3::LinearQuantizer2<float>(num, eb, 524288),
-            SZ3::LinearQuantizer2<float>(num, 1), // the second arg is dummy.
+    auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
+            // SZ3::LinearQuantizer2<T>(num, eb, 524288),
+            SZ3::LinearQuantizer2<T>(num, 1), // the second arg is dummy.
             SZ3::HuffmanEncoder<int>(),
             // SZ3::ArithmeticEncoder<int>(),
             SZ3::Lossless_zstd(),
-            dims, interp_op, direction_op, 50000, layers, block_size
+            dims, interp_op, direction_op, 50000, layers, 0
     );
     // dec_data = sz.decompress(compressed, data.get(), target_eb);
     dec_data = sz.decompress(compressed, data.get(), target_ebs);
@@ -103,15 +103,29 @@ float *interp_decompress(const char *path, std::vector<float> & target_ebs, int 
 }
     return dec_data;
 }
-
 template<uint N, class ... Dims>
-double interp_compress_decompress(const char *path, std::vector<float> &target_ebs, int interp_op, int direction_op,
-                                int layers, int block_size, Dims ... args) {
+double interp_compress_decompress(const char *path, std::vector<double> &target_ebs, int interp_op, int direction_op,
+                                int layers, const char *dataType, Dims ... args) {
+    printf("dataType:%s\n", dataType);
     double compression_ratio = -1;
-    SZ3::uchar * compressed = interp_compress<N>(path, interp_op, direction_op, layers, block_size, 
-                                            compression_ratio, std::forward<Dims>(args)...);
-    float * dec_data = interp_decompress<N>(path, target_ebs, interp_op, direction_op, layers, block_size, 
-                                            compressed, false, std::forward<Dims>(args)...);
+    size_t compressed_size = 0;
+    if(dataType[0] == 'f') {
+        SZ3::uchar * compressed = interp_compress<N, float>(path, interp_op, direction_op, layers, 
+                                                compression_ratio, compressed_size, std::forward<Dims>(args)...);
+        float * dec_data = interp_decompress<N, float>(path, target_ebs, interp_op, direction_op, layers, 
+                                                compressed, false, std::forward<Dims>(args)...);
+    } else if(dataType[0] == 'd') {
+        SZ3::uchar * compressed = interp_compress<N, double>(path, interp_op, direction_op, layers, 
+                                                compression_ratio, compressed_size, std::forward<Dims>(args)...);
+        double * dec_data = interp_decompress<N, double>(path, target_ebs, interp_op, direction_op, layers, 
+                                                compressed, false, std::forward<Dims>(args)...);
+    }
+    // } else if(dataType[0] == 'I') {
+    //     SZ3::uchar * compressed = interp_compress<N, int32_t>(path, interp_op, direction_op, layers, 
+    //                                             compression_ratio, std::forward<Dims>(args)...);
+    //     int32_t * dec_data = interp_decompress<N, int32_t>(path, target_ebs, interp_op, direction_op, layers, 
+    //                                             compressed, false, std::forward<Dims>(args)...);
+    // }
     return compression_ratio;
 }
 
@@ -119,31 +133,35 @@ double interp_compress_decompress(const char *path, std::vector<float> &target_e
 int main(int argc, char **argv) {
     if (argc < 2) {
         std::cout << "psz usage: " << argv[0] <<
-                  " data_file -num_dim dim0 .. dimn target_eb_num target_abs_eb1 target_abs_eb2 ... [interp_op direction_op layers block_size]"
+                  " data_file -[dataType: f/d/I] -num_dim dim0 .. dimn target_eb_num target_abs_eb1 target_abs_eb2 ... [interp_op layers direction_op]"
                   << std::endl
                   << "example: " << argv[0] <<
                   " qmcpack.dat -3 33120 69 69 3 1e-2 1e-3 1e-4 [1 0 3 128]" << std::endl;
         return 0;
     }
 
-    int dim = atoi(argv[2] + 1);
+    int dim = atoi(argv[3] + 1);
     assert(1 <= dim && dim <= 4);
-    int argp = 3;
+    int argp = 4;
     std::vector<size_t> dims(dim);
     for (int i = 0; i < dim; i++) {
         dims[i] = atoi(argv[argp++]);
     }
     int target_eb_num = atoi(argv[argp++]);
     
-    std::vector<float> target_ebs(target_eb_num);
+    std::vector<double> target_ebs(target_eb_num);
     for (int i = 0; i < target_eb_num; i++) {
         target_ebs[i] = atof(argv[argp++]);
     }
 
-    int interp_op = 0; // linear
+    int interp_op = 1; // linear:0 cubic:1
     int direction_op = 0; // dimension high -> low
     if (argp < argc) {
         interp_op = atoi(argv[argp++]);
+    }
+    int layers = 3;
+    if (argp < argc) {
+        layers = atoi(argv[argp++]);
     }
     if (argp < argc) {
         direction_op = atoi(argv[argp++]);
@@ -156,30 +174,26 @@ int main(int argc, char **argv) {
     std::cout << "[Log] direction_op = " << direction_op << std::endl;
 
 
-    int layers = 3;
-    if (argp < argc) {
-        layers = atoi(argv[argp++]);
-    }
 
-    int block_size = 128;
-    if (argp < argc) {
-        block_size = atoi(argv[argp++]);
-    }
+    // int block_size = 128;
+    // if (argp < argc) {
+    //     block_size = atoi(argv[argp++]);
+    // }
 
     std::cout << "[Log] layers = " << layers << std::endl;
-    std::cout << "[Log] block_size = " << block_size << std::endl;
+    // std::cout << "[Log] block_size = " << block_size << std::endl;
     if (dim == 1) {
         interp_compress_decompress<1>(argv[1], target_ebs, interp_op, direction_op, layers,
-                                      block_size, dims[0]);
+                                      argv[2] + 1, dims[0]);
     } else if (dim == 2) {
         interp_compress_decompress<2>(argv[1], target_ebs, interp_op, direction_op, layers,
-                                      block_size, dims[0], dims[1]);
+                                      argv[2] + 1, dims[0], dims[1]);
     } else if (dim == 3) {
         interp_compress_decompress<3>(argv[1], target_ebs, interp_op, direction_op, layers,
-                                      block_size, dims[0], dims[1], dims[2]);
+                                      argv[2] + 1, dims[0], dims[1], dims[2]);
     } else if (dim == 4) {
         interp_compress_decompress<4>(argv[1], target_ebs, interp_op, direction_op, layers,
-                                      block_size, dims[0], dims[1], dims[2], dims[3]);
+                                      argv[2] + 1, dims[0], dims[1], dims[2], dims[3]);
     }
 
 

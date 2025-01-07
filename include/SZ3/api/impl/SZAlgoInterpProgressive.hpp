@@ -26,10 +26,10 @@ namespace SZ3 {
         
         auto sz = make_compressor_sz_progressive<T, N>(
             make_decomposition_interpolation<T, N>(conf,
-                                                   LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
-                                                //    NegabinaryQuantizer<T>(conf.absErrorBound)),
-            // BitplaneEncoder<int>(),
-            HuffmanEncoder<int>(),
+                                                //    LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
+                                                   NegabinaryQuantizer<T>(conf.absErrorBound)),
+            BitplaneEncoder<int>(),
+            // HuffmanEncoder<int>(),
             Lossless_zstd());
         return sz->compress(conf, data, cmpData, cmpCap);
 //        return cmpData;
@@ -41,11 +41,11 @@ namespace SZ3 {
         auto cmpDataPos = cmpData;
         auto sz = make_compressor_sz_progressive<T, N>(
             make_decomposition_interpolation<T, N>(conf,
-                                                   LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
-                                                //    NegabinaryQuantizer<T>(conf.absErrorBound)),
+                                                //    LinearQuantizer<T>(conf.absErrorBound, conf.quantbinCnt / 2)),
+                                                   NegabinaryQuantizer<T>(conf.absErrorBound)),
 
-            // BitplaneEncoder<int>(),
-            HuffmanEncoder<int>(),
+            BitplaneEncoder<int>(),
+            // HuffmanEncoder<int>(),
             Lossless_zstd());
         sz->decompress(conf, cmpDataPos, cmpSize, decData);
     }

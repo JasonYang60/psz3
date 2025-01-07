@@ -13,11 +13,11 @@ namespace SZ3 {
     template<class T>
     class NegabinaryQuantizer : public concepts::QuantizerInterface<T> {
     public:
-        NegabinaryQuantizer() : error_bound(1), error_bound_reciprocal(1), radius(32768) {}//radius(32768)
+        NegabinaryQuantizer() : error_bound(1), error_bound_reciprocal(1), radius(178956970) {}//radius(32768)
 
         NegabinaryQuantizer(double eb) : error_bound(eb), //radius(32768)
                                                     error_bound_reciprocal(1.0 / eb),
-                                                    radius(32768) {
+                                                    radius(178956970) {
             assert(eb != 0);
         }
 
@@ -49,20 +49,20 @@ namespace SZ3 {
                 T decompressed_data = pred + quant_index * this->error_bound;
                 if (fabs(decompressed_data - data) > this->error_bound) {
                     unpred.push_back(data);
-                    return 65535;
+                    return 1 << 31;
                 } else {
                     data = decompressed_data;
                     int a = toNega(quant_index_shifted);
                     if(a >> 16) {
                         unpred.push_back(data);
-                        return 65535;
+                        return 1 << 31;
                     } else {
                         return a;
                     }
                 }
             } else {
                 unpred.push_back(data);
-                return 65535;
+                return 1 << 31;
             }
         }
 
@@ -91,7 +91,7 @@ namespace SZ3 {
                 if (fabs(decompressed_data - ori) > this->error_bound) {
                     unpred.push_back(ori);
                     dest = ori;
-                    return 65535;
+                    return 1 << 31;
                 } else {
                     dest = decompressed_data;
                     return toNega(quant_index_shifted);
@@ -99,13 +99,13 @@ namespace SZ3 {
             } else {
                 unpred.push_back(ori);
                 dest = ori;
-                return 65535;
+                return 1 << 31;
             }
         }
 
         // recover the data using the quantization index
         T recover(T pred, int quant_index) {
-            if (quant_index != 65535) {
+            if (quant_index != 1 << 31) {
                 return recover_pred(pred, fromNega(quant_index));
             } else {
                 return recover_unpred();
