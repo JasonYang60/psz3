@@ -26,6 +26,10 @@ namespace SZ3 {
                 binsCopy[i] = bins[i];
             }
 
+            for (auto &a : binsCopy) {
+                a = toNega(a);
+            }
+
             toCorel(binsCopy);
 
             uchar* outbytes = bitTranspose8inverse(binsCopy);
@@ -72,7 +76,7 @@ namespace SZ3 {
             add_to_quant_ori(bins, bytesCopy, 0, 32);
             std::vector<T> out(targetLength);
             for(int i = 0; i < targetLength; i++) {
-                out[i] = bins[i];
+                out[i] = fromNega(bins[i]);
             }
             return out;
         };
@@ -115,6 +119,14 @@ namespace SZ3 {
             if(b > 0) {
                 result ^= (((last & 1) ? (tab & (1 << (15 - b))) : ((tab & (1 << (31 - b))) >> 16)) >> (15 - b));
             }
+        }
+
+        inline int toNega(int quant) {
+            return ((int32_t) quant + (uint32_t) 0xaaaaaaaau) ^ (uint32_t) 0xaaaaaaaau;
+        }
+
+        inline int fromNega(int nega_quant) {
+            return (((uint32_t) nega_quant) ^ 0xaaaaaaaau) - 0xaaaaaaaau;
         }
 
     };

@@ -35,7 +35,7 @@ namespace SZ3 {
         int quantize_and_overwrite(T &data, T pred) {
             T diff = data - pred;
             auto quant_index = (int64_t) (fabs(diff) * this->error_bound_reciprocal) + 1;
-            if (quant_index < this->radius * 2) {
+            // if (quant_index < this->radius * 2) {
                 quant_index >>= 1;
                 int half_index = quant_index;
                 quant_index <<= 1;
@@ -53,17 +53,18 @@ namespace SZ3 {
                 } else {
                     data = decompressed_data;
                     int a = toNega(quant_index_shifted);
-                    if(a >> 16) {
+                    if(a >> 31) {
                         unpred.push_back(data);
                         return 1 << 31;
                     } else {
-                        return a;
+                        return quant_index_shifted;
                     }
+                    return quant_index_shifted;
                 }
-            } else {
-                unpred.push_back(data);
-                return 1 << 31;
-            }
+            // } else {
+            //     unpred.push_back(data);
+            //     return 1 << 31;
+            // }
         }
 
         /**
@@ -106,7 +107,8 @@ namespace SZ3 {
         // recover the data using the quantization index
         T recover(T pred, int quant_index) {
             if (quant_index != 1 << 31) {
-                return recover_pred(pred, fromNega(quant_index));
+                // return recover_pred(pred, fromNega(quant_index));
+                return recover_pred(pred, quant_index);
             } else {
                 return recover_unpred();
             }

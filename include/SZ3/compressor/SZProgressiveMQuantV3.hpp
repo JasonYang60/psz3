@@ -1344,6 +1344,18 @@ namespace SZ3 {
                 ebs = {(T)(range * 1e-9)};
                 // ebs = {(T)(1e-6)};
                 break;
+            case 11:
+                ebs = {(T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 15:
+                ebs = {(T)(range * 1e-9 * 65536), (T)(range * 1e-9 * 4096), (T)(range * 1e-9 * 256), (T)(range * 1e-9 * 16), (T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 20:
+                ebs = {(T)(range * 1e-9 * 4096), (T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
             case 99:
                 ebs = {(T)(range * 1e-3)};
                 // ebs = {(T)(1e-6)};
