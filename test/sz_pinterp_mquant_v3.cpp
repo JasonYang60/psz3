@@ -18,11 +18,15 @@ template<uint N, typename T, class ... Dims>
 SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
                                 int layers, double &compression_ratio, size_t &total_compressed_size, Dims ... args) {
     std::vector<size_t> compressed_size;
+
     total_compressed_size = 0;
     SZ3::uchar *compressed;
 
     size_t num = 0;
+    SZ3::Timer timer_io(true);
     auto data = SZ3::readfile<T>(path, num);
+    timer_io.stop("loading from disk");
+
     {
         std::cout << "****************** compression ****************" << std::endl;
         std::cout << "Interp op          = " << interp_op << std::endl
@@ -30,8 +34,8 @@ SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
                   << "Layers             = " << layers << std::endl
                   << "Block size         = " << 0 << std::endl;
 
-        SZ3::Timer timer(true);
         auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
+
         auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
                 // SZ3::LinearQuantizer2<T>(num, eb, 524288),
                 SZ3::LinearQuantizer2<T>(num, 1), // the second arg is dummy.
@@ -40,9 +44,14 @@ SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
                 SZ3::Lossless_zstd(3),
                 dims, interp_op, direction_op, 50000, layers, 0
         );
-        compressed = sz.compress(data.get(), total_compressed_size);
-        timer.stop("Compression");
+        SZ3::uchar *lossless_data = new SZ3::uchar[size_t((sz.num_elements < 1000000 ? 100 : 2.0) * sz.num_elements) * sizeof(T)]; //?
+        sz.setupLayers(data.get());
+        SZ3::Timer timer_compress(true);
+        timer_compress.start();
+        compressed = sz.compress(data.get(), total_compressed_size, lossless_data);
+        timer_compress.stop("Compression");
 
+        
         // total_compressed_size = std::accumulate(compressed_size.begin(), compressed_size.end(), (size_t) 0);
         compression_ratio = num * sizeof(T) * 1.0 / total_compressed_size;
         std::cout << "Compressed size = " << total_compressed_size << std::endl;

@@ -12,6 +12,9 @@
 #include <omp.h>
 
 #include "SZ3/def.hpp"
+#include <xmmintrin.h>
+#include <immintrin.h>
+#include <stddef.h>
 
 namespace SZ3 {
 
@@ -351,11 +354,13 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
     size_t nBlocks = in.size() / blockSize;
 
     uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
+    // uchar* out_B = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
     #pragma omp parallel for
     for(size_t bit = 0; bit  < bitsPerInt; bit++) {
         uint32_t mask = 1 << bit;
         for(size_t b = 0; b < nBlocks; b++) {
             size_t baseIn = b * blockSize;
+            // _mm_prefetch(reinterpret_cast<char const*>(&in[baseIn + 8]), _MM_HINT_T0);
             uint32_t in_0 = (in[baseIn + 0] & mask) >> bit;
             uint32_t in_1 = (in[baseIn + 1] & mask) >> bit;
             uint32_t in_2 = (in[baseIn + 2] & mask) >> bit;
@@ -368,6 +373,102 @@ inline uchar* bitTranspose8(aligned_vector<int32_t> &in)
                 | (in_4 << 3) | (in_5 << 2) | (in_6 << 1) | ((in_7 & 1u));
         }
     }
+    
+        // for(size_t b = 0; b < nBlocks; b++) {
+        //     size_t baseIn = b * blockSize;
+            // uint32_t in_0 = in[baseIn + 0];
+            // uint32_t in_1 = in[baseIn + 1];
+            // uint32_t in_2 = in[baseIn + 2];
+            // uint32_t in_3 = in[baseIn + 3];
+            // uint32_t in_4 = in[baseIn + 4];
+            // uint32_t in_5 = in[baseIn + 5];
+            // uint32_t in_6 = in[baseIn + 6];
+            // uint32_t in_7 = in[baseIn + 7];
+            // for(size_t bit = 0; bit < bitsPerInt; bit++) {
+            //     uint32_t mask = 1 << bit;
+            //     // _mm_prefetch(reinterpret_cast<char const*>(&out[(bit + 1) * nBlocks + b]), _MM_HINT_T2);s
+
+            //     out[bit * nBlocks + b] = (((in_0 & mask) >> bit) << 7) | (((in_1 & mask) >> bit) << 6) | (((in_2 & mask) >> bit) << 5) | (((in_3 & mask) >> bit) << 4)
+            //         | (((in_4 & mask) >> bit) << 3) | (((in_5 & mask) >> bit) << 2) | (((in_6 & mask) >> bit) << 1) | ((((in_7 & mask) >> bit) & 1u));
+            // }
+    //         for (int bit_index = 0; bit_index < 32; bit_index++) {
+    //             uint8_t packed = 0;
+    //             for (int j = 0; j < 8; j++) {
+    //                 // 取出 in[j] 的第 bit_index 位
+    //                 uint8_t bit = (in[baseIn + j] >> bit_index) & 1;
+    //                 // 将它放到 packed 的第 j 个位置上
+    //                 packed |= (bit << j);
+    //             }
+    //             // 将该 8 位结果存到输出里
+                
+    //             out_A[b * 32 + bit_index] = packed;
+    //         }
+
+    //     }
+
+    // size_t N = nBlocks;
+    // size_t BLOCK = 1;
+    //         // A: N×32, B: 32×N
+    // for (size_t iBlock = 0; iBlock < N; iBlock += BLOCK) {
+    //     // iBlock.. iBlock+BLOCK-1 是行分块
+    //     const size_t iMax = std::min(iBlock + BLOCK, N);
+
+    //     for (size_t jBlock = 0; jBlock < 32; jBlock += BLOCK) {
+    //         // jBlock.. jBlock+BLOCK-1 是列分块
+    //         const size_t jMax = std::min(jBlock + BLOCK, (size_t)32);
+
+    //         // 在这个 BLOCK×BLOCK 的小块内做标准转置
+    //         for (size_t i = iBlock; i < iMax; i++) {
+    //             for (size_t j = jBlock; j < jMax; j++) {
+    //                 out_B[j * N + i] = out_A[i * 32 + j];
+    //             }
+    //         }
+    //     }
+    // }
+    
+    // // 常量向量：对应 (in_0<<7) (in_1<<6) ... (in_7<<0) 的“权重”
+    // alignas(32) static const int32_t muls[8] = {
+    //     1 << 7, 1 << 6, 1 << 5, 1 << 4,
+    //     1 << 3, 1 << 2, 1 << 1, 1 << 0
+    // };
+    // __m256i c = _mm256_load_si256(reinterpret_cast<const __m256i*>(muls));
+
+    // // 遍历每一位
+    // for (size_t bit = 0; bit < bitsPerInt; ++bit)
+    // {
+    //     // maskv = 1 << bit
+    //     const uint32_t maskValue = (1u << bit);
+    //     __m256i maskv  = _mm256_set1_epi32(maskValue);
+    //     __m256i shiftv = _mm256_set1_epi32(static_cast<int>(bit));
+
+    //     // 遍历所有 block
+    //     for (size_t b = 0; b < nBlocks; ++b)
+    //     {
+    //         // 1) 加载 8 个 32 位整数到 __m256i
+    //         const __m256i data = _mm256_loadu_si256(
+    //             reinterpret_cast<const __m256i*>(&in[b * blockSize])
+    //         );
+
+    //         // 2) 与 mask 相与 (保留需要的 bit)，再逻辑右移 bit 位
+    //         __m256i bits = _mm256_and_si256(data, maskv);
+    //         bits = _mm256_srlv_epi32(bits, shiftv);
+
+    //         // 3) 与常量向量 muls 相乘，使它们分别变成 128,64,32,16,8,4,2,1
+    //         bits = _mm256_mullo_epi32(bits, c);
+
+    //         // 4) 暂存到本地数组，然后做标量水平求和
+    //         alignas(32) int32_t tmp[8];
+    //         _mm256_store_si256(reinterpret_cast<__m256i*>(tmp), bits);
+
+    //         uint32_t sum = 0;
+    //         for (int i = 0; i < 8; ++i) {
+    //             sum += static_cast<uint32_t>(tmp[i]);
+    //         }
+
+    //         // 5) 将此 sum 的低 8 位写入 out
+    //         out[bit * nBlocks + b] = static_cast<uchar>(sum);
+    //     }
+    // }
 
     return out;
 }
@@ -384,7 +485,7 @@ inline uchar* bitTranspose8inverse(aligned_vector<int32_t> &in)
     size_t nBlocks = in.size() / blockSize;
 
     uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for(size_t bit = 0; bit  < bitsPerInt; bit++) {
         uint32_t mask = 1 << (bitsPerInt - bit - 1);
         for(size_t b = 0; b < nBlocks; b++) {
@@ -627,7 +728,7 @@ inline void add_to_quant(aligned_vector<int32_t>& quant_inds, uchar* loaded_bits
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
 
     int mod8 = intLen % 8;
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
         // size_t i = b * 8;
         // uchar temp[32] = {0};
@@ -752,7 +853,7 @@ inline void add_to_quant_ori(aligned_vector<int32_t>& quant_inds, uchar* loaded_
     size_t byteLen = intLen / 8 + (intLen % 8 == 0 ? 0 : 1);
 
     int mod8 = intLen % 8;
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (size_t b = 0; b < (mod8 == 0 ? byteLen : byteLen - 1); b++) {
         // size_t i = b * 8;
         // uchar temp[32] = {0};

@@ -1,6 +1,17 @@
 #ifndef _SZ_INTEGER_QUANTIZER2_HPP
 #define _SZ_INTEGER_QUANTIZER2_HPP
 
+
+#if defined(_MSC_VER)
+// MSVC
+#define ALWAYS_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+// GCC or Clang
+#define ALWAYS_INLINE inline __attribute__((always_inline))
+#else
+#define ALWAYS_INLINE inline
+#endif
+
 #include <cstring>
 #include <cassert>
 #include <iostream>
@@ -43,7 +54,7 @@ namespace SZ3 {
 
         // quantize the data with a prediction value, and returns the quantization index and the decompressed data
         // int quantize(T data, T pred, T& dec_data);
-        int quantize_and_overwrite(size_t idx, T &data, T pred) {
+        ALWAYS_INLINE int quantize_and_overwrite(size_t idx, T &data, T pred) {
             T diff = data - pred;
             int quant_index = (int) (fabs(diff) * this->error_bound_reciprocal) + 1;
             if (quant_index < this->radius * 2) {

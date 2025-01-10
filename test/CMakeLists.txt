@@ -22,9 +22,10 @@ foreach (EXE IN LISTS exes)
     # target_compile_options(${EXE} PRIVATE 
     #     -O3
     #     -mavx2
-    #     -march=native
-    #     # -ftree-vectorize
+    # #     -march=native
+    # #     # -ftree-vectorize
     # )
+    add_definitions(-DSZ3_DEBUG_TIMINGS=1)
 endforeach ()
 #install(FILES ${PROJECT_SOURCE_DIR}/test/testfloat_8_8_128.dat DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 

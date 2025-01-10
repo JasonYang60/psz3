@@ -20,6 +20,16 @@
 #include <cmath>
 #include <immintrin.h>
 
+#if defined(_MSC_VER)
+// MSVC
+#define ALWAYS_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+// GCC or Clang
+#define ALWAYS_INLINE inline __attribute__((always_inline))
+#else
+#define ALWAYS_INLINE inline
+#endif
+
 namespace SZ3 {
     template<class T, uint N, class Quantizer, class Encoder, class Lossless>
     class SZProgressiveMQuant {
@@ -66,6 +76,9 @@ namespace SZ3 {
                 global_end[i] = global_dimensions[i] - 1;
             }
 
+            quant_inds.reserve(num_elements);
+            error.reserve(num_elements);
+            dec_delta.reserve(num_elements);
             dim_offsets[N - 1] = 1;
             for (int i = N - 2; i >= 0; i--) {
                 dim_offsets[i] = dim_offsets[i + 1] * global_dimensions[i + 1];
@@ -422,6 +435,7 @@ namespace SZ3 {
             ska::unordered_map<std::string, double> result;
             dec_delta.clear();
             dec_delta.resize(num_elements, 0);
+            // std::fill(dec_delta.begin(), dec_delta.end(), 0);
             for (uint level = level_progressive; level > 0; level--) {
                 for (int direct = 0; direct < N; direct++) {
                     int lid = (level_progressive - level) * N + direct;
@@ -500,10 +514,10 @@ namespace SZ3 {
             return dec_data;
         }
 
-        uchar *compress(T *data, size_t & compressed_size) {
-            // Timer time(true);
-            setupLayers(data);
-            uchar *lossless_data = new uchar[size_t((num_elements < 1000000 ? 100 : 2.0) * num_elements) * sizeof(T)]; //?
+        uchar *compress(T *data, size_t & compressed_size, uchar *lossless_data) {
+            Timer time(true);
+            time.start();
+            // setupLayers(data);
             uchar * lossless_data_pos = lossless_data;
             
             
@@ -514,6 +528,8 @@ namespace SZ3 {
                 quantizer.set_eb(eb);
                 if(isFirst){
                     isFirst = false;
+                    time.stop("preprecompression");
+
                     compressed_size = compress(data, lossless_data_pos);
                     lossless_data_pos += compressed_size;
                 } else {
@@ -541,9 +557,13 @@ namespace SZ3 {
 
 
             Timer timer(true);
+            Timer timer3(true);
+            Timer timer5(true);
+            timer5.start();
+            // error.resize(num_elements, 0);
+            std::fill(error.begin(), error.end(), 0);
+            std::cout << "pre compress time = " << timer5.stop() << std::endl;
 
-            quant_inds.reserve(num_elements);
-            error.resize(num_elements, 0);
             size_t interp_compressed_size = 0;
             size_t quant_inds_total = 0;
 
@@ -560,6 +580,7 @@ namespace SZ3 {
             size_t estimated_lossless_size_size = 1 + N * level_progressive * bitgroup.size() + 1;
             std::vector<size_t> lossless_size;
             lossless_size.reserve(estimated_lossless_size_size);
+
             write(estimated_lossless_size_size, lossless_data_pos);
             uchar *lossless_size_pos = lossless_data_pos;
             lossless_data_pos += estimated_lossless_size_size * sizeof(size_t);
@@ -582,6 +603,7 @@ namespace SZ3 {
             
             Timer timer2(true);
             double totalTime = 0;
+            double totalTime3 = 0;
             for (uint level = level_progressive; level > 0; level--) {
 
 //                quantizer.set_eb((level >= 3) ? eb * eb_ratio : eb);
@@ -591,9 +613,11 @@ namespace SZ3 {
                     quantize(0, data[0], 0);
                 }
                 for (int d = 0; d < N; d++) {
+                    timer3.start();
 
                     block_interpolation(data, data, global_begin, global_end, &SZProgressiveMQuant::quantize,
                                         interpolators[interpolator_id], directions[d], stride, true);
+                    totalTime3 += timer3.stop();
 
                     auto quant_size = quant_inds.size();
                     quant_inds_total += quant_size;
@@ -613,9 +637,12 @@ namespace SZ3 {
             std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
             std::cout << "compress time = " << timer.stop() << std::endl;
             std::cout << "encoding time = " << totalTime << std::endl;
+            std::cout << "decomposition time = " << totalTime3 << std::endl;
             assert(quant_inds_total >= num_elements);
 
             // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
+            Timer timer4;
+            timer4.start();
 
             uchar *buffer = new uchar[quantizer.get_unpred_size() * (sizeof(T) + sizeof(size_t)) + 40];
             uchar *buffer_pos = buffer;
@@ -632,8 +659,66 @@ namespace SZ3 {
             // quantizer.set_eb(1e-5);
             // compress_progressive(error.data(), lossless_size, lossless_data);
             quantizer.postcompress_data();
+            std::cout << "post compress time = " << timer4.stop() << std::endl;
+
             return std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
 
+        }
+
+        size_t num_elements;
+        void setupLayers(T *data){
+            getRange(data);
+            printf("Value Range = %.4f\n", range);
+            switch (layers)
+            {
+            case 1:
+                ebs = {(T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 2:
+                ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-3), (T)(1e-6)};
+                break;
+            case 3:
+                ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
+                break;
+            case 4:
+                ebs = {(T)(range * 1e-3), (T)(range * 1e-4), (T)(range * 1e-5), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 5:
+                ebs = {(T)(range * 1e-6 * 4096), (T)(range * 1e-6 * 256), (T)(range * 1e-6 * 16), (T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 9:
+                ebs = {(T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 11:
+                ebs = {(T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 15:
+                ebs = {(T)(range * 1e-9 * 65536), (T)(range * 1e-9 * 4096), (T)(range * 1e-9 * 256), (T)(range * 1e-9 * 16), (T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 20:
+                ebs = {(T)(range * 1e-9 * 4096), (T)(range * 1e-9)};
+                // ebs = {(T)(1e-6)};
+                break;
+            case 99:
+                ebs = {(T)(range * 1e-3)};
+                // ebs = {(T)(1e-6)};
+                break;
+            default:
+                ebs = {(T)(range * 1e-6)};
+                // ebs = {(T)(1e-6)};
+                std::cout << "[warning] param 'layers' too large." << std::endl;
+                layers = 1;
+                break;
+            }
+            layers = ebs.size();
         }
 
     private:
@@ -656,7 +741,6 @@ namespace SZ3 {
         std::vector<T> error;
         std::vector<T> l2_diff;
         size_t quant_cnt = 0; // for decompress
-        size_t num_elements;
         std::array<size_t, N> global_dimensions, global_begin, global_end;
         std::array<size_t, N> dim_offsets;
         std::array<std::pair<std::array<int, N>, std::array<int, N - 1>>, N> directions;
@@ -763,7 +847,9 @@ namespace SZ3 {
 
 
         size_t encode_lossless_bitplane(int lid, uchar *&lossless_data_pos, std::vector<size_t> &lossless_size, T eb) {
+            Timer timer0;
             Timer timer;
+            timer0.start();
             int bsize = bitgroup.size();
             size_t qsize = quant_inds.size();
             std::vector<int> quants(qsize);
@@ -814,12 +900,10 @@ namespace SZ3 {
             int shift = 0;
 
             size_t bitPlane_size = 0;
-            timer.start();      
 
 
             uchar* buffer_bp = bitTranspose8(quant_inds);
             // uint64_t* buffer_bp = bitTranspose64(quant_inds);
-            totalTime += timer.stop();
 
             int numofEachBitPlane = (qsize + 7) / 8;
             // int numofEachBitPlane = (qsize + 63) / 64;
@@ -847,6 +931,7 @@ namespace SZ3 {
                 shift += bitgroup[b];
                 uchar* lossless_data_pos_pos = lossless_data_pos;
                 
+            timer.start();      
 
                 if(quants.size() > 0){    
                     // write(pred_table_0, lossless_data_pos_pos);
@@ -862,6 +947,7 @@ namespace SZ3 {
                 } else {
                     lossless_size.push_back(0);
                 }
+            totalTime += timer.stop();
 
 
                 // huffman && zstd ends
@@ -874,7 +960,7 @@ namespace SZ3 {
             quant_inds.clear();
             // error.clear();
 
-            // std::cout << "encoding time: " << totalTime << std::endl;
+            std::cout << "encoding time: " << totalTime / timer0.stop() << std::endl;
 
             return total_size;
         }
@@ -1315,60 +1401,6 @@ namespace SZ3 {
             return true;
         }
 
-        void setupLayers(T *data){
-            getRange(data);
-            printf("Value Range = %.4f\n", range);
-            switch (layers)
-            {
-            case 1:
-                ebs = {(T)(range * 1e-6)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 2:
-                ebs = {(T)(range * 1e-3), (T)(range * 1e-6)};
-                // ebs = {(T)(1e-3), (T)(1e-6)};
-                break;
-            case 3:
-                ebs = {(T)(range * 1e-2), (T)(range * 1e-4), (T)(range * 1e-6)};
-                // ebs = {(T)(1e-2), (T)(1e-4), (T)(1e-6)};
-                break;
-            case 4:
-                ebs = {(T)(range * 1e-3), (T)(range * 1e-4), (T)(range * 1e-5), (T)(range * 1e-6)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 5:
-                ebs = {(T)(range * 1e-6 * 4096), (T)(range * 1e-6 * 256), (T)(range * 1e-6 * 16), (T)(range * 1e-6)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 9:
-                ebs = {(T)(range * 1e-9)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 11:
-                ebs = {(T)(range * 1e-9)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 15:
-                ebs = {(T)(range * 1e-9 * 65536), (T)(range * 1e-9 * 4096), (T)(range * 1e-9 * 256), (T)(range * 1e-9 * 16), (T)(range * 1e-9)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 20:
-                ebs = {(T)(range * 1e-9 * 4096), (T)(range * 1e-9)};
-                // ebs = {(T)(1e-6)};
-                break;
-            case 99:
-                ebs = {(T)(range * 1e-3)};
-                // ebs = {(T)(1e-6)};
-                break;
-            default:
-                ebs = {(T)(range * 1e-6)};
-                // ebs = {(T)(1e-6)};
-                std::cout << "[warning] param 'layers' too large." << std::endl;
-                layers = 1;
-                break;
-            }
-            layers = ebs.size();
-        }
 
         void predict_table(uint32_t & table_0, uint32_t & table_1) {
             int cnt_zero_zero[31] = {0};
