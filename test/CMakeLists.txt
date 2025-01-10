@@ -19,12 +19,14 @@ foreach (EXE IN LISTS exes)
     add_executable(${EXE} ${EXE}.cpp)
     target_link_libraries(${EXE} SZ3)
     install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${EXE} TYPE BIN)
-    # target_compile_options(${EXE} PRIVATE 
-    #     -O3
-    #     -mavx2
-    # #     -march=native
-    # #     # -ftree-vectorize
-    # )
+    target_compile_options(${EXE} PRIVATE 
+        -O3
+        -mavx2
+        # -mbmi2
+        # -march=native
+        # -mavx512f
+    #     # -ftree-vectorize
+    )
     add_definitions(-DSZ3_DEBUG_TIMINGS=1)
 endforeach ()
 #install(FILES ${PROJECT_SOURCE_DIR}/test/testfloat_8_8_128.dat DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})

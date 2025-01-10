@@ -76,8 +76,9 @@ namespace SZ3 {
                 global_end[i] = global_dimensions[i] - 1;
             }
 
-            quant_inds.reserve(num_elements);
-            error.reserve(num_elements);
+            // quant_inds.reserve(num_elements);
+            quant_inds = static_cast<int32_t*>(::operator new(num_elements * sizeof(int32_t), std::align_val_t(256)));
+
             dec_delta.reserve(num_elements);
             dim_offsets[N - 1] = 1;
             for (int i = N - 2; i >= 0; i--) {
@@ -327,7 +328,7 @@ namespace SZ3 {
                             bool update
                             ) {
             size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
-            quant_inds.reserve(num_elements);
+            // quant_inds.reserve(num_elements);
             l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
             // read(l2_diff.data(), l2_diff.size(), buffer, buffer_len);
 
@@ -447,9 +448,11 @@ namespace SZ3 {
                     {   // load bit group data into quant_ids[ ]
                         timer2.start();
 
-                        quant_inds.clear();
+                        // quant_inds.clear();
                         quant_cnt = 0;
-                        quant_inds.resize(quant_size, 0);
+                        // quant_inds.resize(quant_size, 0);
+                        quant_inds_size = quant_size;
+                        memset(quant_inds, 0, quant_inds_size * sizeof(int32_t));
 
                         size_t compressed_bit_package_size = (quant_size + 7) / 8;
                         last_bit[lid].resize(compressed_bit_package_size, 0);
@@ -468,7 +471,7 @@ namespace SZ3 {
                             }
                         }
                         // level_cnt++; 
-                        add_to_quant(quant_inds, loaded_bits, bsum[lid], bg_end);
+                        add_to_quant(quant_inds, quant_inds_size, loaded_bits, bsum[lid], bg_end);
                         ::operator delete(loaded_bits, std::align_val_t(256));
                         totalTime += timer2.stop();
                         
@@ -619,7 +622,8 @@ namespace SZ3 {
                                         interpolators[interpolator_id], directions[d], stride, true);
                     totalTime3 += timer3.stop();
 
-                    auto quant_size = quant_inds.size();
+                    // auto quant_size = quant_inds.size();
+                    auto quant_size = quant_inds_size;
                     quant_inds_total += quant_size;
                     write(quant_size, levelSize_pos);
                     timer2.start();
@@ -734,7 +738,9 @@ namespace SZ3 {
         T range = 0;
         std::vector<T> ebs;
         std::vector<std::string> interpolators;
-        aligned_vector<int32_t> quant_inds;
+        // aligned_vector<int32_t> quant_inds;
+        int32_t* quant_inds;
+        size_t quant_inds_size = 0;
         // std::vector<std::vector<int>> last_bit;
         std::vector<aligned_vector<uchar>> last_bit;
         std::vector<aligned_vector<uchar>> second_last_bit;
@@ -851,11 +857,11 @@ namespace SZ3 {
             Timer timer;
             timer0.start();
             int bsize = bitgroup.size();
-            size_t qsize = quant_inds.size();
+            size_t qsize = quant_inds_size;
             std::vector<int> quants(qsize);
 
-            double multiplier = (quant_inds.size() < 1000000) ? 10.0 : 1.2;
-            size_t buffer_size = static_cast<size_t>(multiplier * quant_inds.size()) * sizeof(T);
+            double multiplier = (quant_inds_size < 1000000) ? 10.0 : 1.2;
+            size_t buffer_size = static_cast<size_t>(multiplier * quant_inds_size) * sizeof(T);
 
             uchar* buffer = static_cast<uchar*>(::operator new(buffer_size, std::align_val_t(256)));
 
@@ -901,9 +907,11 @@ namespace SZ3 {
 
             size_t bitPlane_size = 0;
 
+            timer.start();      
 
-            uchar* buffer_bp = bitTranspose8(quant_inds);
+            uchar* buffer_bp = bitTranspose8(quant_inds, quant_inds_size);
             // uint64_t* buffer_bp = bitTranspose64(quant_inds);
+            totalTime += timer.stop();
 
             int numofEachBitPlane = (qsize + 7) / 8;
             // int numofEachBitPlane = (qsize + 63) / 64;
@@ -931,7 +939,6 @@ namespace SZ3 {
                 shift += bitgroup[b];
                 uchar* lossless_data_pos_pos = lossless_data_pos;
                 
-            timer.start();      
 
                 if(quants.size() > 0){    
                     // write(pred_table_0, lossless_data_pos_pos);
@@ -947,7 +954,6 @@ namespace SZ3 {
                 } else {
                     lossless_size.push_back(0);
                 }
-            totalTime += timer.stop();
 
 
                 // huffman && zstd ends
@@ -957,7 +963,8 @@ namespace SZ3 {
             
             delete[]buffer;
             delete[]buffer_bp;
-            quant_inds.clear();
+            // quant_inds.clear();
+            quant_inds_size = 0;
             // error.clear();
 
             std::cout << "encoding time: " << totalTime / timer0.stop() << std::endl;
@@ -965,70 +972,73 @@ namespace SZ3 {
             return total_size;
         }
 
-        void lossless_decode(uchar const *&lossless_data_pos, const std::vector<size_t> &lossless_size, int lossless_id, size_t quant_size) {
+        // void lossless_decode(uchar const *&lossless_data_pos, const std::vector<size_t> &lossless_size, int lossless_id, size_t quant_size) {
 
-            // size_t remaining_length = lossless_size[lossless_id];
-            retrieved_size += lossless_size[lossless_id];
+        //     // size_t remaining_length = lossless_size[lossless_id];
+        //     retrieved_size += lossless_size[lossless_id];
 
-            size_t rSize = lossless.getFrameConteneSize(lossless_data_pos, lossless_size[lossless_id]);
-            uchar *compressed_data = new uchar[rSize];
-            size_t dcmpSize = lossless.decompress(lossless_data_pos, lossless_size[lossless_id], compressed_data, rSize);
-            uchar const *compressed_data_pos = compressed_data;
+        //     size_t rSize = lossless.getFrameConteneSize(lossless_data_pos, lossless_size[lossless_id]);
+        //     uchar *compressed_data = new uchar[rSize];
+        //     size_t dcmpSize = lossless.decompress(lossless_data_pos, lossless_size[lossless_id], compressed_data, rSize);
+        //     uchar const *compressed_data_pos = compressed_data;
 
-            // size_t quant_size;
-            // read(quant_size, compressed_data_pos, remaining_length);
-            //                printf("%lu\n", quant_size);
-            if (quant_size < 128) {
-                quant_inds.resize(quant_size);
-                read(quant_inds.data(), quant_size, compressed_data_pos, dcmpSize);
-            } else {
-                encoder.load(compressed_data_pos, dcmpSize);
-                quant_inds = encoder.decode(compressed_data_pos, quant_size);
-                encoder.postprocess_decode();
-            }
-            quant_cnt = 0;
+        //     // size_t quant_size;
+        //     // read(quant_size, compressed_data_pos, remaining_length);
+        //     //                printf("%lu\n", quant_size);
+        //     if (quant_size < 128) {
+        //         // quant_inds.resize(quant_size);
+        //         quant_inds_size = quant_size;
+        //         read(quant_inds, quant_size, compressed_data_pos, dcmpSize);
+        //     } else {
+        //         encoder.load(compressed_data_pos, dcmpSize);
+        //         quant_inds = encoder.decode(compressed_data_pos, quant_size);
+        //         encoder.postprocess_decode();
+        //     }
+        //     quant_cnt = 0;
 
-            // lossless.postdecompress_data(compressed_data);
-            delete []compressed_data;
-            lossless_data_pos += lossless_size[lossless_id];
-        }
+        //     // lossless.postdecompress_data(compressed_data);
+        //     delete []compressed_data;
+        //     lossless_data_pos += lossless_size[lossless_id];
+        // }
 
-        size_t encode_lossless(uchar *&lossless_data_pos, std::vector<size_t> &lossless_size) {
-            uchar *compressed_data = new uchar[size_t((quant_inds.size() < 1000000 ? 10 : 1.2) * quant_inds.size()) * sizeof(T)];
-            uchar *compressed_data_pos = compressed_data;
+        // size_t encode_lossless(uchar *&lossless_data_pos, std::vector<size_t> &lossless_size) {
+        //     uchar *compressed_data = new uchar[size_t((quant_inds.size() < 1000000 ? 10 : 1.2) * quant_inds.size()) * sizeof(T)];
+        //     uchar *compressed_data_pos = compressed_data;
 
-            // write((size_t) quant_inds.size(), compressed_data_pos);
-            if (quant_inds.size() < 128) {
-                write(quant_inds.data(), quant_inds.size(), compressed_data_pos);
-            } else {
-                // encoder.preprocess_encode(quant_inds, 0);// for huffman
-                encoder.preprocess_encode(quant_inds, 0);// for huffman
-                encoder.save(compressed_data_pos);
-                encoder.encode(quant_inds, compressed_data_pos);
-                encoder.postprocess_encode();
-            }
+        //     // write((size_t) quant_inds.size(), compressed_data_pos);
+        //     if (quant_inds.size() < 128) {
+        //         write(quant_inds.data(), quant_inds.size(), compressed_data_pos);
+        //     } else {
+        //         // encoder.preprocess_encode(quant_inds, 0);// for huffman
+        //         encoder.preprocess_encode(quant_inds, 0);// for huffman
+        //         encoder.save(compressed_data_pos);
+        //         encoder.encode(quant_inds, compressed_data_pos);
+        //         encoder.postprocess_encode();
+        //     }
 
-            size_t size = lossless.compress(compressed_data, compressed_data_pos - compressed_data,
-                                            lossless_data_pos);
-            // lossless.postcompress_data(compressed_data);
-            // {
-            //     remaining_length = lossless.decompress(lossless_data_pos, remaining_length, compressed_data, num_elements * sizeof(T));
-            //     uchar const *compressed_data_pos = compressed_data;
-            // }
-            delete []compressed_data;
-            lossless_data_pos += size;
-            lossless_size.push_back(size);
+        //     size_t size = lossless.compress(compressed_data, compressed_data_pos - compressed_data,
+        //                                     lossless_data_pos);
+        //     // lossless.postcompress_data(compressed_data);
+        //     // {
+        //     //     remaining_length = lossless.decompress(lossless_data_pos, remaining_length, compressed_data, num_elements * sizeof(T));
+        //     //     uchar const *compressed_data_pos = compressed_data;
+        //     // }
+        //     delete []compressed_data;
+        //     lossless_data_pos += size;
+        //     lossless_size.push_back(size);
 
-            quant_inds.clear();
-            // error.clear();
+        //     quant_inds.clear();
+        //     // error.clear();
 
             
-            return size;
-        }
+        //     return size;
+        // }
 
         inline void quantize(size_t idx, T &data, T pred) {
             // T data0 = data;
-            quant_inds.push_back(quantizer.quantize_and_overwrite(idx, data, pred));
+            // quant_inds.push_back(quantizer.quantize_and_overwrite(idx, data, pred));
+            quant_inds[quant_inds_size] = quantizer.quantize_and_overwrite(idx, data, pred);
+            quant_inds_size++;
             // quant_inds.push_back((int)pred);
             // error.push_back(data0 - data);
             // error[idx] = data0 - data;
@@ -1388,7 +1398,8 @@ namespace SZ3 {
 
         void init(){
             quant_cnt = 0;
-            quant_inds.clear();
+            // quant_inds.clear();
+            quant_inds_size = 0;
             error.clear();
         }
 
@@ -1407,7 +1418,7 @@ namespace SZ3 {
             int cnt_zero_one[31] = {0};
             int cnt_one_zero[31] = {0};
             int cnt_one_one[31] = {0};
-            size_t sz = quant_inds.size();
+            size_t sz = quant_inds_size;
             // #pragma omp parallel
             {
                 int local_count[31][4] = {0};
@@ -1447,9 +1458,10 @@ namespace SZ3 {
             table_1 = 0xFFFFFFFFu >> 1;
         }
 
-        void convert_table(const uint32_t tab_0, const uint32_t tab_1, aligned_vector<int32_t>& quants) {
+        void convert_table(const uint32_t tab_0, const uint32_t tab_1, int32_t* quants) {
 
-            const int sz = (int)quants.size();
+            // const int sz = (int)quants.size();
+            const int sz = quant_inds_size;
 // #pragma omp parallel for
             for(int i = 0; i < sz; i++) {
                 // uint32_t qt = (uint32_t) quants[i];
