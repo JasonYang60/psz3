@@ -134,7 +134,7 @@ namespace SZ3 {
         };
 
         // recover the data using the quantization index
-        T recover(size_t idx, T pred, int quant_index) {
+        ALWAYS_INLINE T recover(size_t idx, T pred, int quant_index) {
             if (!isunpred[idx]) {
                 return recover_pred(pred, quant_index);
             } else {
@@ -143,7 +143,7 @@ namespace SZ3 {
         }
 
 
-        T recover_pred(T pred, int quant_index) {
+        ALWAYS_INLINE T recover_pred(T pred, int quant_index) {
             // return pred + 2 * ((quant_index - this->radius)) * this->error_bound;
             return pred + 2 * (quant_index) * this->error_bound;
         }

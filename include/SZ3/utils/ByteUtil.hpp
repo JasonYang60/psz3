@@ -356,63 +356,82 @@ uchar* bitTranspose8(int32_t* in, size_t& in_size)
 
     uchar* out = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(512)));
     // uchar* out_B = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(256)));
-    // // #pragma omp parallel for
-    // for(size_t bit = 0; bit  < bitsPerInt; bit++) {
-    //     uint32_t mask = 1 << bit;
-    //     for(size_t b = 0; b < nBlocks; b++) {
-    //         size_t baseIn = b * blockSize;
-    //         // _mm_prefetch(reinterpret_cast<char const*>(&in[baseIn + 8]), _MM_HINT_T0);
-    //         uint32_t in_0 = (in[baseIn + 0] & mask) >> bit;
-    //         uint32_t in_1 = (in[baseIn + 1] & mask) >> bit;
-    //         uint32_t in_2 = (in[baseIn + 2] & mask) >> bit;
-    //         uint32_t in_3 = (in[baseIn + 3] & mask) >> bit;
-    //         uint32_t in_4 = (in[baseIn + 4] & mask) >> bit;
-    //         uint32_t in_5 = (in[baseIn + 5] & mask) >> bit;
-    //         uint32_t in_6 = (in[baseIn + 6] & mask) >> bit;
-    //         uint32_t in_7 = (in[baseIn + 7] & mask) >> bit;
-
-    //         // uint32_t in_0 = _pext_u32(in[baseIn + 0], mask);
-    //         // uint32_t in_1 = _pext_u32(in[baseIn + 1], mask);
-    //         // uint32_t in_2 = _pext_u32(in[baseIn + 2], mask);
-    //         // uint32_t in_3 = _pext_u32(in[baseIn + 3], mask);
-    //         // uint32_t in_4 = _pext_u32(in[baseIn + 4], mask);
-    //         // uint32_t in_5 = _pext_u32(in[baseIn + 5], mask);
-    //         // uint32_t in_6 = _pext_u32(in[baseIn + 6], mask);
-    //         // uint32_t in_7 = _pext_u32(in[baseIn + 7], mask);
-            
-    //         out[bit * nBlocks + b] = (in_0 << 7) | (in_1 << 6) | (in_2 << 5) | (in_3 << 4)
-    //             | (in_4 << 3) | (in_5 << 2) | (in_6 << 1) | (in_7);
-    //     }
-    // }
-
-        int cache_cnt = 0;
-        // uchar* buffer = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(512)));
-
+    // #pragma omp parallel for
+    for(size_t bit = 0; bit  < bitsPerInt; bit++) {
+        // uint32_t mask = 1 << bit;
         for(size_t b = 0; b < nBlocks; b++) {
-            // cache_cnt = b % 64;
-            // if(cache_cnt == 0) {
-            //     for(size_t bit = 0; bit < bitsPerInt; bit++) {
-            //         _mm_prefetch(reinterpret_cast<char const*>(&out[(bit) * nBlocks + b + 64]), _MM_HINT_T0);
-            //     }
-            // }
-
             size_t baseIn = b * blockSize;
-            uint32_t in_0 = in[baseIn + 0];
-            uint32_t in_1 = in[baseIn + 1];
-            uint32_t in_2 = in[baseIn + 2];
-            uint32_t in_3 = in[baseIn + 3];
-            uint32_t in_4 = in[baseIn + 4];
-            uint32_t in_5 = in[baseIn + 5];
-            uint32_t in_6 = in[baseIn + 6];
-            uint32_t in_7 = in[baseIn + 7];
-            for(size_t bit = 0; bit < bitsPerInt; bit++) {
-                uint32_t mask = 1 << bit;
-                if(b % 64 == 0) _mm_prefetch(reinterpret_cast<char const*>(&out[(bit + 1) * nBlocks + b]), _MM_HINT_T0);
+            // if(b >> 1)_mm_prefetch(reinterpret_cast<char const*>(&in[baseIn + 16]), _MM_HINT_T0);
+            // uint32_t in_0 = (in[baseIn + 0] & mask) >> bit;
+            // uint32_t in_1 = (in[baseIn + 1] & mask) >> bit;
+            // uint32_t in_2 = (in[baseIn + 2] & mask) >> bit;
+            // uint32_t in_3 = (in[baseIn + 3] & mask) >> bit;
+            // uint32_t in_4 = (in[baseIn + 4] & mask) >> bit;
+            // uint32_t in_5 = (in[baseIn + 5] & mask) >> bit;
+            // uint32_t in_6 = (in[baseIn + 6] & mask) >> bit;
+            // uint32_t in_7 = (in[baseIn + 7] & mask) >> bit;
 
-                out[bit * nBlocks + b] = (((in_0 & mask) >> bit) << 7) | (((in_1 & mask) >> bit) << 6) | (((in_2 & mask) >> bit) << 5) | (((in_3 & mask) >> bit) << 4)
-                    | (((in_4 & mask) >> bit) << 3) | (((in_5 & mask) >> bit) << 2) | (((in_6 & mask) >> bit) << 1) | ((((in_7 & mask) >> bit) & 1u));
-            }
+            // uint32_t in_0 = _pext_u32(in[baseIn + 0], mask);
+            // uint32_t in_1 = _pext_u32(in[baseIn + 1], mask);
+            // uint32_t in_2 = _pext_u32(in[baseIn + 2], mask);
+            // uint32_t in_3 = _pext_u32(in[baseIn + 3], mask);
+            // uint32_t in_4 = _pext_u32(in[baseIn + 4], mask);
+            // uint32_t in_5 = _pext_u32(in[baseIn + 5], mask);
+            // uint32_t in_6 = _pext_u32(in[baseIn + 6], mask);
+            // uint32_t in_7 = _pext_u32(in[baseIn + 7], mask);
+            
+            out[bit * nBlocks + b] = 
+                            (((in[baseIn + 0] >> bit) & 1) << 7) |
+                            (((in[baseIn + 1] >> bit) & 1) << 6) |
+                            (((in[baseIn + 2] >> bit) & 1) << 5) |
+                            (((in[baseIn + 3] >> bit) & 1) << 4) |
+                            (((in[baseIn + 4] >> bit) & 1) << 3) |
+                            (((in[baseIn + 5] >> bit) & 1) << 2) |
+                            (((in[baseIn + 6] >> bit) & 1) << 1) |
+                            (((in[baseIn + 7] >> bit) & 1));
         }
+    }
+
+        // int cache_cnt = 0;
+        // uchar* buffer[32];
+        // for(int i = 0; i < 32; i++) {
+        //     buffer[i] = static_cast<uchar*>(::operator new(512, std::align_val_t(256)));
+        // }
+        // // uchar* buffer = static_cast<uchar*>(::operator new(nBlocks * bitsPerInt, std::align_val_t(512)));
+
+        // for(size_t b = 0; b < nBlocks; b++) {
+        //     // cache_cnt = b % 64;
+        //     // if(cache_cnt == 0) {
+        //     //     for(size_t bit = 0; bit < bitsPerInt; bit++) {
+        //     //         _mm_prefetch(reinterpret_cast<char const*>(&out[(bit) * nBlocks + b + 64]), _MM_HINT_T0);
+        //     //     }
+        //     // }
+
+        //     size_t baseIn = b * blockSize;
+        //     uint32_t in_0 = in[baseIn + 0];
+        //     uint32_t in_1 = in[baseIn + 1];
+        //     uint32_t in_2 = in[baseIn + 2];
+        //     uint32_t in_3 = in[baseIn + 3];
+        //     uint32_t in_4 = in[baseIn + 4];
+        //     uint32_t in_5 = in[baseIn + 5];
+        //     uint32_t in_6 = in[baseIn + 6];
+        //     uint32_t in_7 = in[baseIn + 7];
+        //     for(size_t bit = 0; bit < bitsPerInt; bit++) {
+        //         uint32_t mask = 1 << bit;
+        //         // if(b % 64 == 0) _mm_prefetch(reinterpret_cast<char const*>(&out[(bit + 1) * nBlocks + b]), _MM_HINT_T0);
+
+        //         // out[bit * nBlocks + b] = (((in_0 & mask) >> bit) << 7) | (((in_1 & mask) >> bit) << 6) | (((in_2 & mask) >> bit) << 5) | (((in_3 & mask) >> bit) << 4)
+        //         //     | (((in_4 & mask) >> bit) << 3) | (((in_5 & mask) >> bit) << 2) | (((in_6 & mask) >> bit) << 1) | ((((in_7 & mask) >> bit) & 1u));
+        //         buffer[bit][b % 512] = (((in_0 & mask) >> bit) << 7) | (((in_1 & mask) >> bit) << 6) | (((in_2 & mask) >> bit) << 5) | (((in_3 & mask) >> bit) << 4)
+        //             | (((in_4 & mask) >> bit) << 3) | (((in_5 & mask) >> bit) << 2) | (((in_6 & mask) >> bit) << 1) | ((((in_7 & mask) >> bit) & 1u));
+        //     }
+        //     if(b % 512 == 511) {
+        //         for(int i = 0; i < 32; i++) {
+        //             memcpy(out + i * nBlocks, buffer[i], 512);
+        //         }
+        //     }
+        // }
+
     //         for (int bit_index = 0; bit_index < 32; bit_index++) {
     //             uint8_t packed = 0;
     //             for (int j = 0; j < 8; j++) {

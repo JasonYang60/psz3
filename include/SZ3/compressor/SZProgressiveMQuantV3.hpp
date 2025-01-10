@@ -93,7 +93,9 @@ namespace SZ3 {
         }
 
         T *decompress(uchar const *lossless_data, T *data, std::vector<double> &targetEBs) {
-            setupLayers(data);
+            Timer timer(true);
+            timer.start();
+            // setupLayers(data);
             printf("range = %f\n", range);
             for(auto &eb : targetEBs){
                 eb *= range;    // relative error bound
@@ -106,7 +108,7 @@ namespace SZ3 {
             }
             std::cout << std::endl;
             std::cout << "-------- error bound = " << targetEBs[0] << " --------" << std::endl;
-            
+            timer.stop("pre decmp -4");
             decompress(lossless_data, data, dec_data, targetEBs[0], 0);
             printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
@@ -125,6 +127,8 @@ namespace SZ3 {
             // if(targetErrorBound >= lastEB){
             //     return dec_data;
             // }
+            Timer timer(true);
+            timer.start();
             int lsize = N * level_progressive, bsize = bitgroup.size();
             std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
             uchar const * lossless_data_pos = lossless_data;
@@ -142,7 +146,7 @@ namespace SZ3 {
             std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, levelSize, lossless_size);
 
             // std::vector<std::vector<int>> bitGroupOfLayer_diff(layers, std::vector<int>(lsize, 0));
-            
+            timer.stop("pre decmp -3");            
 
             return decompress(lossless_data, data, dec_data, bitGroupOfLayer_new, bitGroupOfLayer_old);
         }
@@ -238,6 +242,7 @@ namespace SZ3 {
                     std::vector<std::vector<int>> bitGroupOfLayer_new, 
                     std::vector<std::vector<int>> bitGroupOfLayer_old
                     ){
+            Timer timer(true);
             int lsize = N * level_progressive, bsize = bitgroup.size();
             std::vector<int> bsum(lsize, 0), bdelta(lsize, bsize);
             uchar const * lossless_data_pos = lossless_data;
@@ -263,6 +268,7 @@ namespace SZ3 {
                 }
                 bsum = bitGroupOfLayer_old[0];
                 bdelta = bitGroupOfLayer_diff[0];
+                timer.stop("pre decmp -2");
                 compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, update);
                 {   // verification
                     double psnr, nrmse, max_err, range;
@@ -327,6 +333,8 @@ namespace SZ3 {
                             uchar const *cmp_data_pos,
                             bool update
                             ) {
+            Timer timer(true);
+            timer.start();
             size_t compressed_size = std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
             // quant_inds.reserve(num_elements);
             l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
@@ -356,6 +364,7 @@ namespace SZ3 {
                         lossless_id++;
                     }
             }
+            timer.stop("pre decmp -1");
 
             if(level_progressive > 0)
             {
@@ -365,7 +374,9 @@ namespace SZ3 {
                                     data_lb, size_lb,
                                     levelSize, update);
             }
+            timer.start();
             quantizer.postdecompress_data();
+            timer.stop("post decmp -1");
             // printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
 
             // {
@@ -413,8 +424,9 @@ namespace SZ3 {
             }
             Timer timer(true);
             Timer timer2(true);
+            Timer timer3(true);
             double totalTime = 0;
-            timer.start();
+            double totalTime3 = 0;
             bool retrive = true;
             {   // retrive = if elements in bsum are all zeros
                 for(auto i : bsum){
@@ -436,7 +448,8 @@ namespace SZ3 {
             ska::unordered_map<std::string, double> result;
             dec_delta.clear();
             dec_delta.resize(num_elements, 0);
-            // std::fill(dec_delta.begin(), dec_delta.end(), 0);
+
+            timer.start();
             for (uint level = level_progressive; level > 0; level--) {
                 for (int direct = 0; direct < N; direct++) {
                     int lid = (level_progressive - level) * N + direct;
@@ -476,6 +489,7 @@ namespace SZ3 {
                         totalTime += timer2.stop();
                         
                     }
+                    timer3.start();
                     if(level_progressive == levels && lid == 0) // retrive
                     {
                         if(retrive){
@@ -499,6 +513,7 @@ namespace SZ3 {
                                             interpolators[interpolator_id], directions[direct], 1U << (level - 1), true);
                     }
                     bsum[lid] = bg_end;
+                    totalTime3 += timer3.stop();
                 }
             }  
             if (update) {
@@ -514,6 +529,7 @@ namespace SZ3 {
             // }
             std::cout << "decompress time = " << timer.stop() << std::endl;
             std::cout << "decoding time = " << totalTime << std::endl;
+            std::cout << "reconstruction time = " << totalTime3 << std::endl;
             return dec_data;
         }
 
@@ -1046,7 +1062,7 @@ namespace SZ3 {
         }
 
         inline void recover(size_t idx, T &d, T pred) {
-            d = quantizer.recover(idx, pred, quant_inds[quant_cnt++]);
+            d = quantizer.recover_pred(pred, quant_inds[quant_cnt++]);
         };
 
         inline void recover_only_quant(size_t idx, T &d, T pred) {

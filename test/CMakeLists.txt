@@ -22,7 +22,7 @@ foreach (EXE IN LISTS exes)
     target_compile_options(${EXE} PRIVATE 
         -O3
         -mavx2
-        # -mbmi2
+        -mbmi2
         # -march=native
         # -mavx512f
     #     # -ftree-vectorize

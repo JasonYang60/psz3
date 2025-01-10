@@ -70,7 +70,6 @@ T *interp_decompress(const char *path, std::vector<double> & target_ebs, int int
     {
     std::cout << "****************** Decompression ****************" << std::endl;
 
-    SZ3::Timer timer(true);
     auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
     auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
             // SZ3::LinearQuantizer2<T>(num, eb, 524288),
@@ -80,10 +79,13 @@ T *interp_decompress(const char *path, std::vector<double> & target_ebs, int int
             SZ3::Lossless_zstd(),
             dims, interp_op, direction_op, 50000, layers, 0
     );
+    sz.setupLayers(data.get());
+
     // dec_data = sz.decompress(compressed, data.get(), target_eb);
+    // SZ3::Timer timer(true);
     dec_data = sz.decompress(compressed, data.get(), target_ebs);
 
-    timer.stop("Decompression");
+    // timer.stop("Decompression");
 
     if (writeintoFile){
 //        std::string file = std::string(path).substr(std::string(path).rfind('/') + 1) + ".sz3.out";
