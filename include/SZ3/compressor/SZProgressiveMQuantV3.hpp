@@ -1027,10 +1027,11 @@ namespace SZ3 {
         }
 
         inline void quantize(size_t idx, T &data, T pred) {
-            T data0 = data;
+            // T data0 = data;
             quant_inds.push_back(quantizer.quantize_and_overwrite(idx, data, pred));
+            // quant_inds.push_back((int)pred);
             // error.push_back(data0 - data);
-            error[idx] = data0 - data;
+            // error[idx] = data0 - data;
 
         }
 
@@ -1064,11 +1065,11 @@ namespace SZ3 {
         }
 
 
-        double block_interpolation_1d(T *d, T *pd, size_t begin, size_t end, size_t stride,
+        void block_interpolation_1d(T *d, T *pd, size_t begin, size_t end, size_t stride,
                                       const std::string &interp_func, PredictionFunc func) {
             size_t n = (end - begin) / stride + 1;
             if (n <= 1) {
-                return 0;
+                return;
             }
 
             size_t c;
@@ -1102,7 +1103,6 @@ namespace SZ3 {
                     (this->*func)(c, d[c], interp_quad_3(pd[c - stride5x], pd[c - stride3x], pd[c - stride]));
                 }
             }
-            return 0;
         }
 
 
