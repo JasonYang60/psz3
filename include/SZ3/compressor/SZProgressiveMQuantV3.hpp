@@ -98,8 +98,10 @@ namespace SZ3 {
             // setupLayers(data);
             printf("range = %f\n", range);
             for(auto &eb : targetEBs){
+
                 eb *= range;    // relative error bound
             }
+            
             T *dec_data = static_cast<T*>(::operator new(num_elements * sizeof(T), std::align_val_t(256)));
 
             if(targetEBs.empty()){
@@ -108,15 +110,21 @@ namespace SZ3 {
             }
             std::cout << std::endl;
             std::cout << "-------- error bound = " << targetEBs[0] << " --------" << std::endl;
-            timer.stop("pre decmp -4");
-            decompress(lossless_data, data, dec_data, targetEBs[0], 0);
+
+            // timer.stop("pre decmp -4");
+            // decompress(lossless_data, data, dec_data, targetEBs[0], 0);
+            decompress(lossless_data, data, dec_data, targetEBs[0]* 2, 0);
+            // decompress(lossless_data, data, dec_data, targetEBs[0]* (1 + log2(targetEBs[0] / ebs[0]) / 16.), 0);
             printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
             
             for(int i = 1; i < targetEBs.size(); i++) {
                 std::cout << std::endl;
                 std::cout << "-------- error bound = "  << targetEBs[i] << " --------" << std::endl;
-                decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
+                // decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
+                decompress(lossless_data, data, dec_data, targetEBs[i] * 2., targetEBs[i - 1] * 2.);
+                // decompress(lossless_data, data, dec_data, targetEBs[i] * (1 + log2(targetEBs[i] / ebs[0]) / 16.), targetEBs[i - 1] * (1 + log2(targetEBs[i - 1] / ebs[0]) / 16.));
+
                 printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
                 std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
             }
@@ -146,7 +154,7 @@ namespace SZ3 {
             std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup(targetErrorBound, levelSize, lossless_size);
 
             // std::vector<std::vector<int>> bitGroupOfLayer_diff(layers, std::vector<int>(lsize, 0));
-            timer.stop("pre decmp -3");            
+            // timer.stop("pre decmp -3");            
 
             return decompress(lossless_data, data, dec_data, bitGroupOfLayer_new, bitGroupOfLayer_old);
         }
@@ -268,7 +276,7 @@ namespace SZ3 {
                 }
                 bsum = bitGroupOfLayer_old[0];
                 bdelta = bitGroupOfLayer_diff[0];
-                timer.stop("pre decmp -2");
+                // timer.stop("pre decmp -2");
                 compressed_size = decompress(lossless_data_pos, dec_data, bsum, bdelta, levelSize, lossless_size, cmp_data_pos, update);
                 {   // verification
                     double psnr, nrmse, max_err, range;
@@ -364,7 +372,7 @@ namespace SZ3 {
                         lossless_id++;
                     }
             }
-            timer.stop("pre decmp -1");
+            // timer.stop("pre decmp -1");
 
             if(level_progressive > 0)
             {
@@ -376,7 +384,7 @@ namespace SZ3 {
             }
             timer.start();
             quantizer.postdecompress_data();
-            timer.stop("post decmp -1");
+            // timer.stop("post decmp -1");
             // printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
 
             // {
@@ -528,8 +536,8 @@ namespace SZ3 {
             //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             // }
             std::cout << "decompress time = " << timer.stop() << std::endl;
-            std::cout << "decoding time = " << totalTime << std::endl;
-            std::cout << "reconstruction time = " << totalTime3 << std::endl;
+            // std::cout << "decoding time = " << totalTime << std::endl;
+            // std::cout << "reconstruction time = " << totalTime3 << std::endl;
             return dec_data;
         }
 
@@ -547,7 +555,7 @@ namespace SZ3 {
                 quantizer.set_eb(eb);
                 if(isFirst){
                     isFirst = false;
-                    time.stop("preprecompression");
+                    // time.stop("preprecompression");
 
                     compressed_size = compress(data, lossless_data_pos);
                     lossless_data_pos += compressed_size;
@@ -656,8 +664,8 @@ namespace SZ3 {
 //            quant_inds.clear();
             std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
             std::cout << "compress time = " << timer.stop() << std::endl;
-            std::cout << "encoding time = " << totalTime << std::endl;
-            std::cout << "decomposition time = " << totalTime3 << std::endl;
+            // std::cout << "encoding time = " << totalTime << std::endl;
+            // std::cout << "decomposition time = " << totalTime3 << std::endl;
             assert(quant_inds_total >= num_elements);
 
             // write(l2_diff.data(), l2_diff.size(), error_mse_pos);
@@ -983,7 +991,7 @@ namespace SZ3 {
             quant_inds_size = 0;
             // error.clear();
 
-            std::cout << "encoding time: " << totalTime / timer0.stop() << std::endl;
+            // std::cout << "encoding time: " << totalTime / timer0.stop() << std::endl;
 
             return total_size;
         }
