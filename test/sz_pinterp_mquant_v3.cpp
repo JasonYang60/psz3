@@ -81,9 +81,9 @@ T *interp_decompress(const char *path, std::vector<double> & target_ebs, int int
     );
     sz.setupLayers(data.get());
 
-    // dec_data = sz.decompress(compressed, data.get(), target_eb);
     // SZ3::Timer timer(true);
-    dec_data = sz.decompress(compressed, data.get(), target_ebs);
+    // dec_data = sz.decompress(compressed, data.get(), target_ebs);
+    dec_data = sz.decompress_bitrate(compressed, data.get(), target_ebs[0]);
 
     // timer.stop("Decompression");
 
