@@ -62,7 +62,7 @@ SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
 
 template<uint N, typename T, class ... Dims>
 T *interp_decompress(const char *path, std::vector<double> & target_ebs, int interp_op, int direction_op,
-                                int layers, SZ3::uchar * compressed, bool writeintoFile, Dims ... args){
+                                int layers, int mode, SZ3::uchar * compressed, bool writeintoFile, Dims ... args){
     size_t num = 0;
     auto data = SZ3::readfile<T>(path, num);
     T * dec_data = nullptr;
@@ -82,8 +82,11 @@ T *interp_decompress(const char *path, std::vector<double> & target_ebs, int int
     sz.setupLayers(data.get());
 
     // SZ3::Timer timer(true);
-    // dec_data = sz.decompress(compressed, data.get(), target_ebs);
-    dec_data = sz.decompress_bitrate(compressed, data.get(), target_ebs[0]);
+    if(mode == 0) {
+        dec_data = sz.decompress(compressed, data.get(), target_ebs);
+    } else {
+        dec_data = sz.decompress_bitrate(compressed, data.get(), target_ebs[0]);
+    }
 
     // timer.stop("Decompression");
 
@@ -116,19 +119,19 @@ T *interp_decompress(const char *path, std::vector<double> & target_ebs, int int
 }
 template<uint N, class ... Dims>
 double interp_compress_decompress(const char *path, std::vector<double> &target_ebs, int interp_op, int direction_op,
-                                int layers, const char *dataType, Dims ... args) {
+                                int layers, int mode, const char *dataType, Dims ... args) {
     printf("dataType:%s\n", dataType);
     double compression_ratio = -1;
     size_t compressed_size = 0;
     if(dataType[0] == 'f') {
         SZ3::uchar * compressed = interp_compress<N, float>(path, interp_op, direction_op, layers, 
                                                 compression_ratio, compressed_size, std::forward<Dims>(args)...);
-        float * dec_data = interp_decompress<N, float>(path, target_ebs, interp_op, direction_op, layers, 
+        float * dec_data = interp_decompress<N, float>(path, target_ebs, interp_op, direction_op, layers, mode,
                                                 compressed, false, std::forward<Dims>(args)...);
     } else if(dataType[0] == 'd') {
         SZ3::uchar * compressed = interp_compress<N, double>(path, interp_op, direction_op, layers, 
                                                 compression_ratio, compressed_size, std::forward<Dims>(args)...);
-        double * dec_data = interp_decompress<N, double>(path, target_ebs, interp_op, direction_op, layers, 
+        double * dec_data = interp_decompress<N, double>(path, target_ebs, interp_op, direction_op, layers, mode,
                                                 compressed, false, std::forward<Dims>(args)...);
     }
     // } else if(dataType[0] == 'I') {
@@ -171,11 +174,16 @@ int main(int argc, char **argv) {
         interp_op = atoi(argv[argp++]);
     }
     int layers = 3;
+    int mode = 0; // 0: error bound mode; 1: bit rate mode
+
     if (argp < argc) {
         layers = atoi(argv[argp++]);
     }
     if (argp < argc) {
         direction_op = atoi(argv[argp++]);
+    }
+    if (argp < argc) {
+        mode = atoi(argv[argp++]);
     }
     if (interp_op == -1 || direction_op == -1) {
         std::cout << "Tuning not support.\n";
@@ -194,16 +202,16 @@ int main(int argc, char **argv) {
     std::cout << "[Log] layers = " << layers << std::endl;
     // std::cout << "[Log] block_size = " << block_size << std::endl;
     if (dim == 1) {
-        interp_compress_decompress<1>(argv[1], target_ebs, interp_op, direction_op, layers,
+        interp_compress_decompress<1>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
                                       argv[2] + 1, dims[0]);
     } else if (dim == 2) {
-        interp_compress_decompress<2>(argv[1], target_ebs, interp_op, direction_op, layers,
+        interp_compress_decompress<2>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
                                       argv[2] + 1, dims[0], dims[1]);
     } else if (dim == 3) {
-        interp_compress_decompress<3>(argv[1], target_ebs, interp_op, direction_op, layers,
+        interp_compress_decompress<3>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
                                       argv[2] + 1, dims[0], dims[1], dims[2]);
     } else if (dim == 4) {
-        interp_compress_decompress<4>(argv[1], target_ebs, interp_op, direction_op, layers,
+        interp_compress_decompress<4>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
                                       argv[2] + 1, dims[0], dims[1], dims[2], dims[3]);
     }
 
