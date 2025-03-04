@@ -92,43 +92,54 @@ namespace SZ3 {
             
         }
 
-        T *decompress_bitrate(uchar const *lossless_data, T *data, double bitrate) 
+        T *decompress_bitrate(uchar const *lossless_data, T *data, std::vector<double> bitrate_list) 
         {
             Timer timer(true);
             timer.start();
             // setupLayers(data);
-            printf("range = %f\n", range);
+            // printf("range = %f\n", range);
 
             size_t total_size = num_elements * sizeof(T);
-            size_t size_limit = static_cast<size_t>(bitrate / (sizeof(T) * 8) * total_size);
+            size_t size_limit = static_cast<size_t>(bitrate_list[0] / (sizeof(T) * 8) * total_size);
 
             T *dec_data = static_cast<T*>(::operator new(num_elements * sizeof(T), std::align_val_t(256)));
 
             
             std::cout << std::endl;
-            std::cout << "-------- target ratio = " << size_limit * 100.0/total_size<< " % --------" << std::endl;
-
+            std::cout << "-------- Data Chunk #1 --------" << std::endl;
+            std::cout << "[Log] Target bitrate = " << bitrate_list[0] << " bps" << std::endl;
+            size_t last_rs = 0;
             // timer.stop("pre decmp -4");
             // decompress(lossless_data, data, dec_data, targetEBs[0], 0);
-            decompress_bitrate(lossless_data, data, dec_data, size_limit);
+            decompress_bitrate(lossless_data, data, dec_data, size_limit, 0);
             // decompress(lossless_data, data, dec_data, targetEBs[0]* (1 + log2(targetEBs[0] / ebs[0]) / 16.), 0);
-            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
-            std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
+            std::cout << "[Log] Data Chunk #1: " << "size = " << retrieved_size << " Bytes (" << retrieved_size * 100.0 / (num_elements * sizeof(T)) << "\% original data)" << std::endl;
+            printf("[Log] Total Retrieved size = %lu Bytes (%.3f%% original data, bitrate = %.3f bps)\n", retrieved_size, retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size * 8.0 * sizeof(T) / (num_elements * sizeof(T)) );
+            last_rs = retrieved_size;
+            // std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
             
-            // for(int i = 1; i < targetEBs.size(); i++) {
-            //     std::cout << std::endl;
-            //     std::cout << "-------- error bound = "  << targetEBs[i] << " --------" << std::endl;
-            //     // decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
-            //     decompress(lossless_data, data, dec_data, targetEBs[i] * 2., targetEBs[i - 1] * 2.);
-            //     // decompress(lossless_data, data, dec_data, targetEBs[i] * (1 + log2(targetEBs[i] / ebs[0]) / 16.), targetEBs[i - 1] * (1 + log2(targetEBs[i - 1] / ebs[0]) / 16.));
+            for(int i = 1; i < bitrate_list.size(); i++) {
+                std::cout << std::endl;
+                std::cout << "-------- Data Chunk #" << i + 1 << " --------" << std::endl;
+                std::cout << "[Log] Target bitrate = " << bitrate_list[i] << " bps" << std::endl;
 
-            //     printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
-            //     std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
-            // }
+                size_t size_limit_new = static_cast<size_t>(bitrate_list[i] / (sizeof(T) * 8) * total_size);
+                size_t size_limit_old = static_cast<size_t>(bitrate_list[i - 1] / (sizeof(T) * 8) * total_size);
+
+                // decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
+                decompress_bitrate(lossless_data, data, dec_data, size_limit_new, size_limit_old);
+
+                // decompress(lossless_data, data, dec_data, targetEBs[i] * 2., targetEBs[i - 1] * 2.);
+                // decompress(lossless_data, data, dec_data, targetEBs[i] * (1 + log2(targetEBs[i] / ebs[0]) / 16.), targetEBs[i - 1] * (1 + log2(targetEBs[i - 1] / ebs[0]) / 16.));
+                std::cout << "[Log] Data Chunk #"<< i + 1 <<": " << "size = " << retrieved_size - last_rs << " Bytes (" << (retrieved_size - last_rs) * 100.0 / (num_elements * sizeof(T)) << "\% original data)" << std::endl;
+                printf("[Log] Retrieved size = %lu Bytes (%.3f%% original data, bitrate = %.3f bps)\n", retrieved_size, retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size * 8.0 * sizeof(T) / (num_elements * sizeof(T)) );
+                last_rs = retrieved_size;
+                // std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
+            }
             return dec_data;
         }
 
-        void *decompress_bitrate(uchar const *lossless_data, T *data, T *dec_data, size_t size_limit) 
+        void *decompress_bitrate(uchar const *lossless_data, T *data, T *dec_data, size_t size_limit_new, size_t size_limit_old) 
         {
             // if(targetErrorBound >= lastEB){
             //     return dec_data;
@@ -144,15 +155,19 @@ namespace SZ3 {
             uchar const * cmp_data_pos = nullptr;
             loadcfg(lossless_data_pos, levelSize, lossless_size, cmp_data_pos, false, false);
 
-            size_limit -= lossless_size[0] * 3;
-
+            size_limit_new -= lossless_size[0] * 3;
+            if (size_limit_old != 0) {
+                size_limit_old -= lossless_size[0] * 3;
+            }
             lossless_size.erase(lossless_size.begin());
             // lossless_size.erase(lossless_size.end());
             lossless_size.pop_back(); 
             // int progressive_layer_old, progressive_layer_new = 0;
             std::vector<std::vector<int>> bitGroupOfLayer_old(layers, std::vector<int>(lsize, 0));
-
-            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup_bitrate(size_limit, lossless_size);
+            if (size_limit_old != 0) {
+                bitGroupOfLayer_old = calcBitgroup_bitrate(size_limit_old, lossless_size);
+            }
+            std::vector<std::vector<int>> bitGroupOfLayer_new = calcBitgroup_bitrate(size_limit_new, lossless_size);
 
             // std::vector<std::vector<int>> bitGroupOfLayer_diff(layers, std::vector<int>(lsize, 0));
             // timer.stop("pre decmp -3");            
@@ -164,7 +179,7 @@ namespace SZ3 {
             Timer timer(true);
             timer.start();
             // setupLayers(data);
-            printf("range = %f\n", range);
+            // printf("range = %f\n", range);
             for(auto &eb : targetEBs){
 
                 eb *= range;    // relative error bound
@@ -173,28 +188,37 @@ namespace SZ3 {
             T *dec_data = static_cast<T*>(::operator new(num_elements * sizeof(T), std::align_val_t(256)));
 
             if(targetEBs.empty()){
-                std::cout << "[error]target error bound is empty." << std::endl;
+                std::cout << "[error] target error bound is empty." << std::endl;
                 return dec_data;
             }
             std::cout << std::endl;
-            std::cout << "-------- error bound = " << targetEBs[0] << " --------" << std::endl;
+            std::cout << "-------- Data Chunk #1 --------" << std::endl;
 
+            std::cout << "[Log] Target (absolute) error bound = " << targetEBs[0] << std::endl;
+            size_t last_rs = 0;
             // timer.stop("pre decmp -4");
             decompress(lossless_data, data, dec_data, targetEBs[0], 0);
             // decompress(lossless_data, data, dec_data, targetEBs[0]* 2, 0);
             // decompress(lossless_data, data, dec_data, targetEBs[0]* (1 + log2(targetEBs[0] / ebs[0]) / 16.), 0);
-            printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
-            std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
+            std::cout << "[Log] Data Chunk #1: " << "size = " << retrieved_size << " Bytes (" << retrieved_size * 100.0 / (num_elements * sizeof(T)) << "\% original data)" << std::endl;
+            printf("[Log] Total Retrieved size = %lu Bytes (%.3f%% original data, bitrate = %.3f bps)\n", retrieved_size, retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size * 8.0 * sizeof(T) / (num_elements * sizeof(T)) );
+            last_rs = retrieved_size;
+            // std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0/ retrieved_size  << " --------" << std::endl;
             
             for(int i = 1; i < targetEBs.size(); i++) {
                 std::cout << std::endl;
-                std::cout << "-------- error bound = "  << targetEBs[i] << " --------" << std::endl;
+                std::cout << "-------- Data Chunk #" << i + 1 << " --------" << std::endl;
+                std::cout << "[Log] Target (absolute) error bound = " << targetEBs[i] << std::endl;
+
+
                 decompress(lossless_data, data, dec_data, targetEBs[i], targetEBs[i - 1]);
                 // decompress(lossless_data, data, dec_data, targetEBs[i] * 2., targetEBs[i - 1] * 2.);
                 // decompress(lossless_data, data, dec_data, targetEBs[i] * (1 + log2(targetEBs[i] / ebs[0]) / 16.), targetEBs[i - 1] * (1 + log2(targetEBs[i - 1] / ebs[0]) / 16.));
 
-                printf("[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
-                std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
+                std::cout << "[Log] Data Chunk #"<< i + 1 <<": " << "size = " << retrieved_size - last_rs << " Bytes (" << (retrieved_size - last_rs) * 100.0 / (num_elements * sizeof(T)) << "\% original data)" << std::endl;
+                printf("[Log] Retrieved size = %lu Bytes (%.3f%% original data, bitrate = %.3f bps)\n", retrieved_size, retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size * 8.0 * sizeof(T) / (num_elements * sizeof(T)) );
+                last_rs = retrieved_size;
+                // std::cout << "-------- compression ratio = " << (num_elements * sizeof(T)) * 1.0 / retrieved_size << " --------" << std::endl;
             }
             return dec_data;
         }
@@ -263,7 +287,7 @@ namespace SZ3 {
                         buffer += lossless_size[i];
                     }
                     buffer_len = lossless_size[lossless_size.size() - 1];
-                    printf("[Log] unpred size = %lld\n", (long long int)buffer_len);
+                    // printf("[Log] unpred size = %lld\n", (long long int)buffer_len);
                     retrieved_size += buffer_len;
                 }
                 size_t rSize = lossless.getFrameConteneSize(buffer, buffer_len);
@@ -522,17 +546,17 @@ namespace SZ3 {
                                 bool update
                                 ) {
             // size_t level_cnt_temp = level_cnt;
-            {   // print eg.1 1 0 -> 1 1 1
-                // printf("-----------------------\n");
-                for (int l = 0; l < lsize; l++) {
-                    printf("%d ", bsum[l]);
-                }
-                printf(" -> ");
-                for (int l = 0; l < lsize; l++) {
-                    printf("%d ", bsum[l] + bdelta[l]);
-                }
-                printf("\n");
-            }
+            // {   // print eg.1 1 0 -> 1 1 1
+            //     // printf("-----------------------\n");
+            //     for (int l = 0; l < lsize; l++) {
+            //         printf("%d ", bsum[l]);
+            //     }
+            //     printf(" -> ");
+            //     for (int l = 0; l < lsize; l++) {
+            //         printf("%d ", bsum[l] + bdelta[l]);
+            //     }
+            //     printf("\n");
+            // }
             Timer timer(true);
             Timer timer2(true);
             Timer timer3(true);
@@ -638,7 +662,7 @@ namespace SZ3 {
             //     verify(data, dec_data, num_elements, psnr, nrmse, max_err, range, l2_no_propo);
             //     printf("------[Log] retrieved = %.3f%% %lu\n", retrieved_size * 100.0 / (num_elements * sizeof(T)), retrieved_size);
             // }
-            std::cout << "decompress time = " << timer.stop() << std::endl;
+            // std::cout << "decompress time = " << timer.stop() << std::endl;
             // std::cout << "decoding time = " << totalTime << std::endl;
             // std::cout << "reconstruction time = " << totalTime3 << std::endl;
             return dec_data;
@@ -692,7 +716,7 @@ namespace SZ3 {
             timer5.start();
             // error.resize(num_elements, 0);
             std::fill(error.begin(), error.end(), 0);
-            std::cout << "pre compress time = " << timer5.stop() << std::endl;
+            // std::cout << "pre compress time = " << timer5.stop() << std::endl;
 
             size_t interp_compressed_size = 0;
             size_t quant_inds_total = 0;
@@ -700,7 +724,7 @@ namespace SZ3 {
             
 
             T eb = quantizer.get_eb();
-            std::cout << "Absolute error bound = " << eb << std::endl;
+            std::cout << "[Log] Absolute error bound = " << eb << std::endl;
 //            quantizer.set_eb(eb * eb_ratio);
             l2_diff.resize(level_progressive * N * bitgroup.size(), 0);
 
@@ -765,8 +789,8 @@ namespace SZ3 {
             }
 
 //            quant_inds.clear();
-            std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
-            std::cout << "compress time = " << timer.stop() << std::endl;
+            // std::cout << "total element = " << num_elements << ", quantization element = " << quant_inds_total << std::endl;
+            std::cout << "[Log] Compression time = " << timer.stop() << " sec" << std::endl;
             // std::cout << "encoding time = " << totalTime << std::endl;
             // std::cout << "decomposition time = " << totalTime3 << std::endl;
             assert(quant_inds_total >= num_elements);
@@ -790,7 +814,7 @@ namespace SZ3 {
             // quantizer.set_eb(1e-5);
             // compress_progressive(error.data(), lossless_size, lossless_data);
             quantizer.postcompress_data();
-            std::cout << "post compress time = " << timer4.stop() << std::endl;
+            // std::cout << "post compress time = " << timer4.stop() << std::endl;
 
             return std::accumulate(lossless_size.begin(), lossless_size.end(), (size_t) 0);
 
@@ -799,7 +823,7 @@ namespace SZ3 {
         size_t num_elements;
         void setupLayers(T *data){
             getRange(data);
-            printf("Value Range = %.4f\n", range);
+            // printf("Value Range = %.4f\n", range);
             switch (layers)
             {
             case 1:
@@ -1306,13 +1330,13 @@ namespace SZ3 {
                 direction_id++;
             } while (std::next_permutation(base_direction.begin(), base_direction.end()));
 
-            for (int i = 0; i < N; i++) {
-                printf("direction %d is ", i);
-                for (int j = 0; j < N; j++) {
-                    printf("%d ", directions[i].first[j]);
-                }
-                printf("\n");
-            }
+            // for (int i = 0; i < N; i++) {
+            //     printf("direction %d is ", i);
+            //     for (int j = 0; j < N; j++) {
+            //         printf("%d ", directions[i].first[j]);
+            //     }
+            //     printf("\n");
+            // }
         }
 
         void global_index(size_t offset) {
