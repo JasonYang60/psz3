@@ -36,9 +36,9 @@ Original SZ Authors: Sheng Di, Kai Zhao, Xin Liang, Dingwen Tao, Franck Cappello
 Copyright © 2016, UChicago Argonne, LLC  
 
 ## Installation
-
-* mkdir build && cd build
-* cmake ..
-* make
-
+```
+mkdir build && cd build
+cmake ..
+make
+```
 Then, you'll find all the executables in [INSTALL_DIR]/test
