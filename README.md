@@ -1,10 +1,11 @@
-SZ3: A Modular Error-bounded Lossy Compression Framework for Scientific Datasets
-=====
-(C) 2016 by Mathematics and Computer Science (MCS), Argonne National Laboratory. See COPYRIGHT in top-level directory.
+## License
 
-* Major Authors: Sheng Di, Kai Zhao, Xin Liang
-* Supervisor: Franck Cappello
-* Other Contributors: Robert Underwood, Sihuan Li, Ali M. Gok
+IPComp is licensed under the BSD 3-Clause License.
+
+This software is based on SZ (Version 3.0), originally developed by Argonne National Laboratory.
+
+Original SZ Authors: Sheng Di, Kai Zhao, Xin Liang, Dingwen Tao, Franck Cappello  
+Copyright © 2016, UChicago Argonne, LLC  
 
 ## Installation
 

@@ -1,3 +1,17 @@
+/*
+ * IPComp: Interpolation-based Progressive Compression for Scientific Data
+ *
+ * Copyright (c) 2025, Your Name or Your Organization
+ * All rights reserved.
+ *
+ * This software is based on SZ (Version 3.0), developed at Argonne National Laboratory.
+ * Original Copyright © 2016, UChicago Argonne, LLC
+ * Authors: Sheng Di, Kai Zhao, Xin Liang, Dingwen Tao, Franck Cappello
+ *
+ * Licensed under the BSD 3-Clause License. See LICENSE file for details.
+ */
+
+
 //#include <compressor/SZProgressiveIndependentBlock.hpp>
 //#include <compressor/SZProgressive.hpp>
 #include <SZ3/compressor/SZProgressiveMQuantV3.hpp>
@@ -143,16 +157,21 @@ double interp_compress_decompress(const char *path, std::vector<double> &target_
     return compression_ratio;
 }
 
+void usage(char* cmd) {
+    std::cout << "IPComp usage: " << cmd <<
+                  " data_file -[dataType: f/d] -num_dim dim0 .. dimn -[mode: bitrate/error] -bound_num bound1 bound2 .. (optional: -[interpMode: linear/cubic])"
+                  << std::endl
+                  << "example: " << cmd <<
+                  " density.d64 -d -3 256 384 384 -error -3 1e-2 1e-3 1e-4 (-cubic)" << std::endl;
+}
+
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        std::cout << "psz usage: " << argv[0] <<
-                  " data_file -[dataType: f/d/I] -num_dim dim0 .. dimn target_eb_num target_abs_eb1 target_abs_eb2 ... [interp_op layers direction_op]"
-                  << std::endl
-                  << "example: " << argv[0] <<
-                  " qmcpack.dat -3 33120 69 69 3 1e-2 1e-3 1e-4 [1 0 3 128]" << std::endl;
+        usage(argv[0]);
         return 0;
     }
+
 
     int dim = atoi(argv[3] + 1);
     assert(1 <= dim && dim <= 4);
@@ -161,7 +180,20 @@ int main(int argc, char **argv) {
     for (int i = 0; i < dim; i++) {
         dims[i] = atoi(argv[argp++]);
     }
-    int target_eb_num = atoi(argv[argp++]);
+
+    char* decomp_mode = argv[argp++];
+    int mode = 0; // 0: error bound mode; 1: bit rate mode
+    if (strcmp(decomp_mode, "-error") == 0) {
+        mode = 0;
+    } else if (strcmp(decomp_mode, "-bitrate") == 0) {
+        mode = 1;
+    } else {
+        usage(argv[0]);
+        std::cout << "Reconstruction mode has to be either 'bitrate' or 'error'." << std::endl;
+        return 0;
+    }
+    
+    int target_eb_num = atoi(argv[argp++] + 1);
     
     std::vector<double> target_ebs(target_eb_num);
     for (int i = 0; i < target_eb_num; i++) {
@@ -171,20 +203,26 @@ int main(int argc, char **argv) {
     int interp_op = 1; // linear:0 cubic:1
     int direction_op = 0; // dimension high -> low
     if (argp < argc) {
-        interp_op = atoi(argv[argp++]);
+        char* interp_mode = argv[argp++];
+        if (strcmp(interp_mode, "-linear") == 0) {
+            interp_op = 0;
+        } else if (strcmp(interp_mode, "-cubic") == 0) {
+            interp_op = 1;
+        } else {
+            usage(argv[0]);
+            return 0;
+        }
     }
-    int layers = 3;
-    int mode = 0; // 0: error bound mode; 1: bit rate mode
+    int layers = 9;
 
-    if (argp < argc) {
-        layers = atoi(argv[argp++]);
-    }
-    if (argp < argc) {
-        direction_op = atoi(argv[argp++]);
-    }
-    if (argp < argc) {
-        mode = atoi(argv[argp++]);
-    }
+    if((argv[2] + 1)[0] == 'f') {layers = 6;} 
+    else if((argv[2] + 1)[0] == 'd') {layers = 9;}
+    // if (argp < argc) {
+    //     direction_op = atoi(argv[argp++]);
+    // }
+    // if (argp < argc) {
+    //     mode = atoi(argv[argp++]);
+    // }
     if (interp_op == -1 || direction_op == -1) {
         std::cout << "Tuning not support.\n";
         return 0;
@@ -203,17 +241,19 @@ int main(int argc, char **argv) {
     // std::cout << "[Log] block_size = " << block_size << std::endl;
     if (dim == 1) {
         interp_compress_decompress<1>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
-                                      argv[2] + 1, dims[0]);
+                                    argv[2] + 1, dims[0]);
     } else if (dim == 2) {
         interp_compress_decompress<2>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
-                                      argv[2] + 1, dims[0], dims[1]);
+                                    argv[2] + 1, dims[0], dims[1]);
     } else if (dim == 3) {
         interp_compress_decompress<3>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
-                                      argv[2] + 1, dims[0], dims[1], dims[2]);
+                                    argv[2] + 1, dims[0], dims[1], dims[2]);
     } else if (dim == 4) {
         interp_compress_decompress<4>(argv[1], target_ebs, interp_op, direction_op, layers, mode,
-                                      argv[2] + 1, dims[0], dims[1], dims[2], dims[3]);
+                                    argv[2] + 1, dims[0], dims[1], dims[2], dims[3]);
     }
+
+
 
 
     return 0;

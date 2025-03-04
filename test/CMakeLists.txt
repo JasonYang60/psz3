@@ -1,18 +1,5 @@
-set(exes #sz_demo
-        #sz_fast
-        #sz_truncate
-        #sz_pw
-        #test_huffman_coding
-        #test_arithmetic_coding
-        #sz_interp
-        #sz_pinterp
-        #sz_pinterp_mquant
-        #sz_pinterp_mquant_v1
-        #sz_pinterp_mquant_v2
-        sz_pinterp_mquant_v3
-        #sz_pinterp_savememory
-        #sz_rtm
-        #sz_interp_double
+set(exes 
+        IPComp
         )
 foreach (EXE IN LISTS exes)
     message(STATUS "Target = ${EXE}")
