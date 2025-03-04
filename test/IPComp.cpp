@@ -182,6 +182,10 @@ int main(int argc, char **argv) {
     }
 
     char* decomp_mode = argv[argp++];
+    std::cout << argv[1] ;
+    std::cout << argv[2] ;
+    std::cout << argv[3] ;
+    std::cout << argv[4] ;
     int mode = 0; // 0: error bound mode; 1: bit rate mode
     if (strcmp(decomp_mode, "-error") == 0) {
         mode = 0;
@@ -236,6 +240,6 @@ int main(int argc, char **argv) {
                                     argv[2] + 1, dims[0], dims[1], dims[2], dims[3]);
     }
 
-
+    std::cout << std::endl;
     return 0;
 }
