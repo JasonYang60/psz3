@@ -2,17 +2,21 @@
 #define _DEF_HPP
 
 #include <cmath>
-#include <boost/align/aligned_allocator.hpp>
 #include <vector>
 
-namespace SZ3 {
-
-    typedef unsigned int uint;
-    typedef unsigned char uchar;
+#if __has_include(<boost/align/aligned_allocator.hpp>)
+    #include <boost/align/aligned_allocator.hpp>
     template <typename T>
     using aligned_vector = std::vector<T, boost::alignment::aligned_allocator<T, 256>>;
+#else
+    #include <memory>
+    template <typename T>
+    using aligned_vector = std::vector<T, std::allocator<T>>;  
+#endif
 
+namespace SZ3 {
+    typedef unsigned int uint;
+    typedef unsigned char uchar;
 }
 
-
-#endif
+#endif  // _DEF_HPP

@@ -16,13 +16,13 @@ IPComp <datafile> -dataType[f/d] -dim_num <dim1> <dim2> ... -bound_mode -bound_n
 Example Commands: 
 - Error-Bounded Progressive Compression
 ```
-./test/IPComp density.d64 -d -3 256 384 384 -error -3 1e-3 1e-4 1e-5
+./src/IPComp density.d64 -d -3 256 384 384 -error -3 1e-3 1e-4 1e-5
 ```
 This compresses the dataset density.d64 with progressive error bounds at 1e-3, 1e-4, and 1e-5.
 
 - Bitrate-Bounded Progressive Compression
 ```
-./test/IPComp density.d64 -d -3 256 384 384 -bitrate -3 1.0 2.0 3.0 
+./src/IPComp density.d64 -d -3 256 384 384 -bitrate -3 1.0 2.0 3.0 
 ```
 This compresses density.d64 using bitrate constraints of 1.0, 2.0 and 3.0 bits per value.
 ## License
