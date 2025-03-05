@@ -14,11 +14,11 @@
 
 //#include <compressor/SZProgressiveIndependentBlock.hpp>
 //#include <compressor/SZProgressive.hpp>
-#include <SZ3/compressor/SZProgressiveMQuantV3.hpp>
+#include <SZ3/compressor/IPComp.hpp>
 #include <SZ3/quantizer/IntegerQuantizer2.hpp>
-#include <SZ3/predictor/ComposedPredictor.hpp>
+// #include <SZ3/predictor/ComposedPredictor.hpp>
 #include <SZ3/lossless/Lossless_zstd.hpp>
-#include <SZ3/encoder/ArithmeticEncoder.hpp>
+#include <SZ3/encoder/BypassEncoder.hpp>
 #include <SZ3/utils/Iterator.hpp>
 #include <SZ3/utils/Verification.hpp>
 #include <cstdio>
@@ -47,10 +47,10 @@ SZ3::uchar *interp_compress(const char *path, int interp_op, int direction_op,
 
         auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
 
-        auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
+        auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::BypassEncoder<int>, SZ3::Lossless_zstd>(
                 // SZ3::LinearQuantizer2<T>(num, eb, 524288),
                 SZ3::LinearQuantizer2<T>(num, 1), // the second arg is dummy.
-                SZ3::HuffmanEncoder<int>(),
+                SZ3::BypassEncoder<int>(),
                 // SZ3::ArithmeticEncoder<int>(),
                 SZ3::Lossless_zstd(3),
                 dims, interp_op, direction_op, 50000, layers, 0
@@ -82,10 +82,10 @@ T *interp_decompress(const char *path, std::vector<double> & target_ebs, int int
     std::cout << "****************** Decompression ****************" << std::endl;
 
     auto dims = std::array<size_t, N>{static_cast<size_t>(std::forward<Dims>(args))...};
-    auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::HuffmanEncoder<int>, SZ3::Lossless_zstd>(
+    auto sz = SZ3::SZProgressiveMQuant<T, N, SZ3::LinearQuantizer2<T>, SZ3::BypassEncoder<int>, SZ3::Lossless_zstd>(
             // SZ3::LinearQuantizer2<T>(num, eb, 524288),
             SZ3::LinearQuantizer2<T>(num, 1), // the second arg is dummy.
-            SZ3::HuffmanEncoder<int>(),
+            SZ3::BypassEncoder<int>(),
             // SZ3::ArithmeticEncoder<int>(),
             SZ3::Lossless_zstd(),
             dims, interp_op, direction_op, 50000, layers, 0

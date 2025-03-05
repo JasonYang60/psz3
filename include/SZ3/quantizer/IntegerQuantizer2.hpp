@@ -55,45 +55,22 @@ namespace SZ3 {
         // quantize the data with a prediction value, and returns the quantization index and the decompressed data
         // int quantize(T data, T pred, T& dec_data);
         ALWAYS_INLINE int quantize_and_overwrite(size_t idx, T &data, T pred) {
-            // T diff = data - pred;
-            // int quant_index = (int) (fabs(diff) * this->error_bound_reciprocal) + 1;
-
-            // quant_index >>= 1;
-            // int half_index = quant_index;
-            // quant_index <<= 1;
-            // int quant_index_shifted;
-            // if (diff < 0) {
-            //     quant_index = -quant_index;
-            //     quant_index_shifted = -half_index;
-            // } else {
-            //     quant_index_shifted = half_index;
-            // }
-            // data = pred + quant_index * this->error_bound;
+            T diff = data - pred;
+            bool is_neg = std::signbit(diff);     
+            T abs_diff = is_neg ? -diff : diff;   
             
-            // return quant_index_shifted;
-                // 1. diff 与 符号
-    T diff = data - pred;
-    bool is_neg = std::signbit(diff);     // 或者 diff < 0.0
-    T abs_diff = is_neg ? -diff : diff;   // 避免直接调用 fabs，可让编译器更好内联
-    
-    // 2. 计算量级
-    int base = static_cast<int>(abs_diff * this->error_bound_reciprocal) + 1;
-    //   base >> 1 即 half_index
-    int half_index = base >> 1; 
-    //   将 base 的最低一位抹零，从而得到跟原始逻辑中 “>>=1 再 <<=1” 等价的结果
-    int quant_index = base & (~1);       
-    
-    // 3. 根据符号修正
-    if (is_neg) {
-        quant_index = -quant_index;      // 用于存回 data
-        half_index  = -half_index;       // 用作返回值
-    }
-    
-    // 4. 覆盖原数据
-    data = pred + (quant_index) * this->error_bound;
+            int base = static_cast<int>(abs_diff * this->error_bound_reciprocal) + 1;
+            int half_index = base >> 1; 
+            int quant_index = base & (~1);       
+            
+            if (is_neg) {
+                quant_index = -quant_index;      
+                half_index  = -half_index;       
+            }
+            
+            data = pred + (quant_index) * this->error_bound;
 
-    // 5. 返回 “shifted index”
-    return half_index;
+            return half_index;
                 
         }
 

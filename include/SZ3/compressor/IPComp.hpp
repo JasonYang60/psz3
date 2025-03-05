@@ -1,8 +1,7 @@
 #ifndef _SZ_SZ_PROG_INTERPOLATION_MULTILEVEL_QUANTIZATION_HPP
 #define _SZ_SZ_PROG_INTERPOLATION_MULTILEVEL_QUANTIZATION_HPP
 
-#include "SZ3/predictor/Predictor.hpp"
-#include "SZ3/predictor/LorenzoPredictor.hpp"
+
 #include "SZ3/quantizer/Quantizer.hpp"
 #include "SZ3/encoder/Encoder.hpp"
 #include "SZ3/lossless/Lossless.hpp"

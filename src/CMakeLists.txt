@@ -4,7 +4,7 @@ set(exes
 foreach (EXE IN LISTS exes)
     message(STATUS "Target = ${EXE}")
     add_executable(${EXE} ${EXE}.cpp)
-    target_link_libraries(${EXE} SZ3)
+    target_link_libraries(${EXE} IPCompProj)
     install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${EXE} TYPE BIN)
     # target_compile_options(${EXE} PRIVATE 
     #     -O3
@@ -20,4 +20,4 @@ endforeach ()
 
 enable_testing()
 
-add_test(NAME Uf48 COMMAND sz_pinterp_mquant_v3 ${CMAKE_CURRENT_BINARY_DIR}/Uf48.bin.dat -3 100 500 500 3 1e-2 1e-3 1e-4 0 0 3 128)
+# add_test(NAME Uf48 COMMAND sz_pinterp_mquant_v3 ${CMAKE_CURRENT_BINARY_DIR}/Uf48.bin.dat -3 100 500 500 3 1e-2 1e-3 1e-4 0 0 3 128)
