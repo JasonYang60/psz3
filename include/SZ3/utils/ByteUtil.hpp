@@ -12,8 +12,8 @@
 #include <omp.h>
 
 #include "SZ3/def.hpp"
-#include <xmmintrin.h>
-#include <immintrin.h>
+// #include <xmmintrin.h>
+// #include <immintrin.h>
 #include <stddef.h>
 
 namespace SZ3 {

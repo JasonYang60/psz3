@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
     }
     int layers = 9;
 
-    if((argv[2] + 1)[0] == 'f') {layers = 6;} // precision: 1e-6
+    if((argv[2] + 1)[0] == 'f') {layers = 1;} // precision: 1e-6
     else if((argv[2] + 1)[0] == 'd') {layers = 9;} // precision: 1e-9
 
     if (dim == 1) {

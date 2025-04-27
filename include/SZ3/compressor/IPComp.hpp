@@ -197,6 +197,7 @@ namespace SZ3 {
             size_t last_rs = 0;
             // timer.stop("pre decmp -4");
             decompress(lossless_data, data, dec_data, targetEBs[0], 0);
+            // timer.stop("decmp ");
             // decompress(lossless_data, data, dec_data, targetEBs[0]* 2, 0);
             // decompress(lossless_data, data, dec_data, targetEBs[0]* (1 + log2(targetEBs[0] / ebs[0]) / 16.), 0);
             std::cout << "[Log] Data Chunk #1: " << "size = " << retrieved_size << " Bytes (" << retrieved_size * 100.0 / (num_elements * sizeof(T)) << "\% original data)" << std::endl;
@@ -508,6 +509,7 @@ namespace SZ3 {
                                     data_lb, size_lb,
                                     levelSize, update);
             }
+            timer.stop("decompress_progressive");
             timer.start();
             quantizer.postdecompress_data();
             // timer.stop("post decmp -1");
@@ -826,7 +828,7 @@ namespace SZ3 {
             switch (layers)
             {
             case 1:
-                ebs = {(T)(range * 1e-6)};
+                ebs = {(T)(range * 1e-3)};
                 // ebs = {(T)(1e-6)};
                 break;
             case 2:
